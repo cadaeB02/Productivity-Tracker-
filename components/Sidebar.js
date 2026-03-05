@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/components/AuthProvider';
 
 const NAV_ITEMS = [
     { href: '/', label: 'Timer', icon: '⏱' },
@@ -16,15 +17,8 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const [user, setUser] = useState(null);
+    const { user } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
-
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => {
-            setUser(data.user);
-        });
-    }, []);
 
     const handleLogout = async () => {
         const supabase = createClient();
