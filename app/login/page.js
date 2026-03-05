@@ -70,7 +70,7 @@ export default function LoginPage() {
                 </form>
 
                 <div className="auth-footer">
-                    Don&apos;t have an account? <Link href="/signup">Sign up</Link>
+                    This app is invite-only.
                 </div>
             </div>
         </div>
