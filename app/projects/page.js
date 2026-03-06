@@ -109,6 +109,7 @@ export default function ProjectsPage() {
     };
 
     const handleDeleteTask = async (id) => {
+        if (!confirm('Delete this task?')) return;
         await deleteTask(id);
         loadData();
     };

@@ -61,6 +61,16 @@ export default function HistoryPage() {
         downloadCSV(csv, `focusarch-history-${new Date().toISOString().split('T')[0]}.csv`);
     };
 
+    const resetManualForm = () => {
+        setManualCompany('');
+        setManualProject('');
+        setManualTask('');
+        setManualDate(new Date().toISOString().split('T')[0]);
+        setManualHours('');
+        setManualMinutes('');
+        setManualSummary('');
+    };
+
     const handleManualEntry = async () => {
         if (!manualTask || (!manualHours && !manualMinutes)) return;
         const durationSeconds = (parseInt(manualHours || 0) * 3600) + (parseInt(manualMinutes || 0) * 60);
@@ -76,9 +86,7 @@ export default function HistoryPage() {
             manualSummary
         );
         setShowManualEntry(false);
-        setManualHours('');
-        setManualMinutes('');
-        setManualSummary('');
+        resetManualForm();
         loadData();
     };
 
@@ -190,7 +198,7 @@ export default function HistoryPage() {
                     </div>
                     <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '16px' }}>
                         <button className="btn btn-primary" onClick={handleManualEntry}>Add Entry</button>
-                        <button className="btn btn-ghost" onClick={() => setShowManualEntry(false)}>Cancel</button>
+                        <button className="btn btn-ghost" onClick={() => { setShowManualEntry(false); resetManualForm(); }}>Cancel</button>
                     </div>
                 </div>
             )}

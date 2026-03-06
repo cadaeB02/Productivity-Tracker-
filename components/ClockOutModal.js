@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { generateSessionSummary } from '@/lib/gemini';
-import { updateSessionAISummary } from '@/lib/store';
+import { updateSessionAISummary, updateSessionSummary } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
 
 export default function ClockOutModal({ session, onClose, onSaved }) {
@@ -17,6 +17,10 @@ export default function ClockOutModal({ session, onClose, onSaved }) {
     const handleSubmit = async () => {
         setLoading(true);
         try {
+            // Save user's typed notes first
+            if (summary.trim()) {
+                await updateSessionSummary(session.id, summary.trim());
+            }
             // Try generating AI summary
             const ai = await generateSessionSummary(taskName, duration, summary);
             setAiResponse(ai);
@@ -28,7 +32,15 @@ export default function ClockOutModal({ session, onClose, onSaved }) {
         setLoading(false);
     };
 
-    const handleSkip = () => {
+    const handleSkip = async () => {
+        // Save any notes the user typed even if they skip AI
+        if (summary.trim()) {
+            try {
+                await updateSessionSummary(session.id, summary.trim());
+            } catch (err) {
+                console.log('Failed to save summary:', err.message);
+            }
+        }
         onSaved?.();
         onClose();
     };

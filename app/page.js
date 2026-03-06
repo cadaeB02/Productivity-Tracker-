@@ -22,6 +22,7 @@ export default function TimerPage() {
     const [showClockOut, setShowClockOut] = useState(false);
     const [completedSession, setCompletedSession] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isWorking, setIsWorking] = useState(false);
     const timerRef = useRef(null);
 
     const loadData = useCallback(async () => {
@@ -65,6 +66,10 @@ export default function TimerPage() {
     }, [activeSession]);
 
     const handleStartTask = async (task) => {
+        // Don't do anything if this task is already the active one
+        if (activeSession?.task_id === task.id) return;
+        if (isWorking) return;
+        setIsWorking(true);
         try {
             // If there's an active session, end it first
             if (activeSession) {
@@ -79,10 +84,12 @@ export default function TimerPage() {
         } catch (err) {
             console.error('Failed to start session', err);
         }
+        setIsWorking(false);
     };
 
     const handleStop = async () => {
-        if (!activeSession) return;
+        if (!activeSession || isWorking) return;
+        setIsWorking(true);
         try {
             const ended = await endSession(activeSession.id);
             setCompletedSession({ ...activeSession, ...ended });
@@ -93,6 +100,7 @@ export default function TimerPage() {
         } catch (err) {
             console.error('Failed to end session', err);
         }
+        setIsWorking(false);
     };
 
     const handleClockOutClose = () => {
@@ -173,8 +181,8 @@ export default function TimerPage() {
 
                 <div style={{ marginTop: '32px' }}>
                     {activeSession ? (
-                        <button className="btn btn-stop" onClick={handleStop}>
-                            ⏹ Stop Working
+                        <button className="btn btn-stop" onClick={handleStop} disabled={isWorking}>
+                            {isWorking ? 'Saving...' : '⏹ Stop Working'}
                         </button>
                     ) : (
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
