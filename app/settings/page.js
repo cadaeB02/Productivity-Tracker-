@@ -134,7 +134,7 @@ export default function SettingsPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <div style={{ fontWeight: 700, fontSize: '1rem' }}>FocusArch</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v1.0.0 — Productivity Tracker</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v2.0.0 — Productivity Tracker</div>
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             Built with Next.js + Supabase + Gemini AI
