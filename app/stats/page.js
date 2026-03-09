@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
+import Icon from '@/components/Icon';
 import { getStats } from '@/lib/store';
 import { formatDurationShort } from '@/lib/utils';
 
@@ -165,7 +166,7 @@ export default function StatsPage() {
             {/* Longest Session */}
             {longestSession && (
                 <div className="card">
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>🏆 Longest Session</h3>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="trophy" size={18} style={{ color: 'var(--color-warning)' }} /> Longest Session</h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div className="session-color" style={{ backgroundColor: longestSession.companies?.color || '#6366f1' }} />
                         <div>

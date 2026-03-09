@@ -201,9 +201,10 @@ select {
 }
 
 .nav-link .nav-icon {
-  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
-  text-align: center;
 }
 
 .sidebar-footer {
@@ -1427,9 +1428,9 @@ textarea.input {
   color: var(--text-muted);
 }
 
-.empty-state .emoji {
-  font-size: 3rem;
+.empty-state .empty-state-icon {
   margin-bottom: 16px;
+  color: var(--text-muted);
 }
 
 .empty-state h3 {
@@ -1443,6 +1444,33 @@ textarea.input {
   font-size: 0.9rem;
   max-width: 360px;
   margin: 0 auto 20px;
+}
+
+/* ==================== SVG ICONS ==================== */
+
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.icon-inline {
+  vertical-align: -0.15em;
+  margin-right: 4px;
+}
+
+.empty-state-icon {
+  margin-bottom: 16px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: center;
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
 }
 
 /* ==================== BADGE ==================== */

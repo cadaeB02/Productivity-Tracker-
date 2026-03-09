@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import ClockOutModal from '@/components/ClockOutModal';
 import PendingSummariesModal from '@/components/PendingSummariesModal';
+import Icon from '@/components/Icon';
 import {
     getCompanies,
     getAllProjects,
@@ -216,7 +217,7 @@ export default function TimerPage() {
                 </div>
                 {contextSwitchCount > 1 && (
                     <div className="context-switch-badge">
-                        🔀 Context Switches: {contextSwitchCount}
+                        <Icon name="shuffle" size={14} /> Context Switches: {contextSwitchCount}
                     </div>
                 )}
             </div>
@@ -243,7 +244,7 @@ export default function TimerPage() {
                                     <div className="session-card-header">
                                         <div className="session-card-info">
                                             <div className={`badge ${isPaused ? 'badge-paused' : 'badge-active'}`}>
-                                                {isPaused ? '⏸ Paused' : '● Recording'}
+                                                {isPaused ? <><Icon name="pause" size={10} /> Paused</> : <><Icon name="record" size={10} /> Recording</>}
                                             </div>
                                             <div className="session-card-task">{taskName}</div>
                                             {companyName && (
@@ -263,21 +264,21 @@ export default function TimerPage() {
                                                 className="btn btn-resume btn-sm"
                                                 onClick={() => handleResume(session)}
                                             >
-                                                ▶ Resume
+                                                <Icon name="play" size={12} /> Resume
                                             </button>
                                         ) : (
                                             <button
                                                 className="btn btn-pause btn-sm"
                                                 onClick={() => handlePause(session)}
                                             >
-                                                ⏸ Pause
+                                                <Icon name="pause" size={12} /> Pause
                                             </button>
                                         )}
                                         <button
                                             className="btn btn-stop-sm btn-sm"
                                             onClick={() => handleStop(session)}
                                         >
-                                            ⏹ Stop
+                                            <Icon name="stop" size={12} /> Stop
                                         </button>
                                     </div>
                                 </div>
@@ -295,8 +296,8 @@ export default function TimerPage() {
                     </div>
                     <div className="timer-display">0:00:00</div>
                     <div style={{ marginTop: '32px' }}>
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            👇 Pick a task to start the timer
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                            <Icon name="arrow-down" size={14} /> Pick a task to start the timer
                         </div>
                     </div>
                 </div>
@@ -309,7 +310,7 @@ export default function TimerPage() {
                         className="btn btn-secondary"
                         onClick={() => setShowPendingSummaries(true)}
                     >
-                        📋 {pendingSummaries.length} Pending {pendingSummaries.length === 1 ? 'Summary' : 'Summaries'}
+                        <Icon name="clipboard" size={14} /> {pendingSummaries.length} Pending {pendingSummaries.length === 1 ? 'Summary' : 'Summaries'}
                     </button>
                 </div>
             )}
@@ -320,7 +321,7 @@ export default function TimerPage() {
 
                 {groupedTasks.length === 0 ? (
                     <div className="empty-state" style={{ padding: '30px 20px' }}>
-                        <div className="emoji">📂</div>
+                        <div className="empty-state-icon"><Icon name="folder" size={48} /></div>
                         <h3>No tasks yet</h3>
                         <p>Go to <a href="/projects">Projects</a> to create companies, projects, and tasks.</p>
                     </div>
@@ -353,7 +354,7 @@ export default function TimerPage() {
                                                         {formatDuration(elapsed)}
                                                     </span>
                                                 ) : (
-                                                    <span className="play-icon">▶</span>
+                                                    <span className="play-icon"><Icon name="play" size={12} /></span>
                                                 )}
                                             </div>
                                         );

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
+import Icon from '@/components/Icon';
 import { hasApiKey, setApiKey, clearApiKey } from '@/lib/gemini';
 import { getSessions, exportSessionsToCSV, downloadCSV } from '@/lib/store';
 
@@ -65,7 +66,7 @@ export default function SettingsPage() {
 
             {/* Gemini API Key */}
             <div className="settings-section">
-                <h3>🤖 Gemini AI Integration</h3>
+                <h3><Icon name="robot" size={18} className="icon-inline" /> Gemini AI Integration</h3>
                 <div className="card">
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                         Enter your Google AI API key to enable AI-powered session summaries and productivity coaching.
@@ -87,14 +88,14 @@ export default function SettingsPage() {
                                 style={{ flex: 1 }}
                             />
                             <button className="btn btn-ghost btn-sm" onClick={() => setShowKey(!showKey)}>
-                                {showKey ? '🙈' : '👁'}
+                                {showKey ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                             </button>
                         </div>
                     </div>
 
                     <div className="flex gap-2 items-center">
                         <button className="btn btn-primary btn-sm" onClick={handleSaveKey}>
-                            {saved ? '✅ Saved!' : 'Save Key'}
+                            {saved ? <><Icon name="check-circle" size={14} style={{ color: 'var(--color-success)' }} /> Saved!</> : 'Save Key'}
                         </button>
                         {hasKey && (
                             <button className="btn btn-danger btn-sm" onClick={handleClearKey}>
@@ -110,7 +111,7 @@ export default function SettingsPage() {
 
             {/* Data Management */}
             <div className="settings-section">
-                <h3>💾 Data Management</h3>
+                <h3><Icon name="save" size={18} className="icon-inline" /> Data Management</h3>
                 <div className="card">
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                         Export your session data for backup or analysis.
@@ -118,10 +119,10 @@ export default function SettingsPage() {
 
                     <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
                         <button className="btn btn-secondary" onClick={handleExportAll}>
-                            📥 Export CSV
+                            <Icon name="download" size={14} /> Export CSV
                         </button>
                         <button className="btn btn-secondary" onClick={handleExportJSON}>
-                            📦 Export JSON Backup
+                            <Icon name="package" size={14} /> Export JSON Backup
                         </button>
                     </div>
                 </div>
@@ -129,7 +130,7 @@ export default function SettingsPage() {
 
             {/* About */}
             <div className="settings-section">
-                <h3>ℹ️ About</h3>
+                <h3><Icon name="info" size={18} className="icon-inline" /> About</h3>
                 <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
+import Icon from '@/components/Icon';
 import {
     getCompanies,
     getProjects,
@@ -173,7 +174,7 @@ export default function ProjectsPage() {
             {/* Companies List */}
             {companies.length === 0 && !showNewCompany ? (
                 <div className="empty-state">
-                    <div className="emoji">🏢</div>
+                    <div className="empty-state-icon"><Icon name="building" size={48} /></div>
                     <h3>No companies yet</h3>
                     <p>Create your first company to start organizing your work and tracking time.</p>
                     <button className="btn btn-primary" onClick={() => setShowNewCompany(true)}>
@@ -218,14 +219,14 @@ export default function ProjectsPage() {
                                                 setEditCompanyName(company.name);
                                             }}
                                         >
-                                            ✏️
+                                            <Icon name="edit" size={14} />
                                         </button>
                                         <button
                                             className="btn-icon"
                                             title="Delete"
                                             onClick={() => handleDeleteCompany(company.id)}
                                         >
-                                            🗑
+                                            <Icon name="trash" size={14} />
                                         </button>
                                     </div>
                                 </div>
@@ -256,7 +257,7 @@ export default function ProjectsPage() {
                                                                     handleDeleteProject(project.id);
                                                                 }}
                                                             >
-                                                                ✕
+                                                                <Icon name="close" size={12} />
                                                             </button>
                                                         </div>
                                                     </div>
@@ -271,7 +272,7 @@ export default function ProjectsPage() {
                                                                         style={{ fontSize: '0.7rem' }}
                                                                         onClick={() => handleDeleteTask(task.id)}
                                                                     >
-                                                                        ✕
+                                                                        <Icon name="close" size={10} />
                                                                     </button>
                                                                 </div>
                                                             ))}

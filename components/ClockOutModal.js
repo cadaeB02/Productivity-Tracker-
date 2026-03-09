@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { generateSessionSummary } from '@/lib/gemini';
 import { updateSessionAISummary, endSession } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
+import Icon from '@/components/Icon';
 
 export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessions = false }) {
     const [summary, setSummary] = useState('');
@@ -73,7 +74,7 @@ export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessio
             <div className="modal" onClick={(e) => e.stopPropagation()}>
                 {!saved ? (
                     <>
-                        <h3>⏹️ Session Complete</h3>
+                        <h3><Icon name="stop" size={20} className="icon-inline" /> Session Complete</h3>
                         <p style={{ color: 'var(--text-secondary)', marginBottom: '8px', fontSize: '0.9rem' }}>
                             {taskName} • {formatDuration(originalDuration)}
                         </p>
@@ -157,14 +158,14 @@ export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessio
                                         AI Processing...
                                     </>
                                 ) : (
-                                    '✨ Save & Get AI Summary'
+                                    <><Icon name="sparkle" size={14} /> Save & Get AI Summary</>
                                 )}
                             </button>
                         </div>
                     </>
                 ) : (
                     <>
-                        <h3>✅ Session Saved</h3>
+                        <h3><Icon name="check-circle" size={20} className="icon-inline" style={{ color: 'var(--color-success)' }} /> Session Saved</h3>
                         <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.9rem' }}>
                             {taskName} • {formatDuration(editedDuration)}
                             {durationChanged && (
@@ -191,8 +192,8 @@ export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessio
                                 padding: '16px',
                                 marginBottom: '16px',
                             }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-                                    🤖 AI Summary
+                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Icon name="robot" size={14} /> AI Summary
                                 </div>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                                     {aiResponse}

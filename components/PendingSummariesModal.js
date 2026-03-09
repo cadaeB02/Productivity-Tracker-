@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { generateSessionSummary } from '@/lib/gemini';
 import { updateSessionAISummary } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
+import Icon from '@/components/Icon';
 
 export default function PendingSummariesModal({ sessions, onClose, onSaved }) {
     const [summaries, setSummaries] = useState({});
@@ -58,7 +59,7 @@ export default function PendingSummariesModal({ sessions, onClose, onSaved }) {
     return (
         <div className="modal-overlay" onClick={allDone ? handleDone : undefined}>
             <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
-                <h3>📋 Pending Summaries</h3>
+                <h3><Icon name="clipboard" size={20} className="icon-inline" /> Pending Summaries</h3>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '0.9rem' }}>
                     You have {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'} to summarize
                 </p>
@@ -85,7 +86,7 @@ export default function PendingSummariesModal({ sessions, onClose, onSaved }) {
                                         </div>
                                     </div>
                                     {isDone ? (
-                                        <span className="pending-summary-check">✅</span>
+                                        <span className="pending-summary-check"><Icon name="check-circle" size={20} style={{ color: 'var(--color-success)' }} /></span>
                                     ) : (
                                         <button
                                             className="btn btn-primary btn-sm"
@@ -113,7 +114,7 @@ export default function PendingSummariesModal({ sessions, onClose, onSaved }) {
                                             disabled={isLoading}
                                             style={{ alignSelf: 'flex-end', marginTop: '8px' }}
                                         >
-                                            {isLoading ? 'Saving...' : '✨ Save & AI Summary'}
+                                            {isLoading ? 'Saving...' : <><Icon name="sparkle" size={14} /> Save & AI Summary</>}
                                         </button>
                                     </div>
                                 )}

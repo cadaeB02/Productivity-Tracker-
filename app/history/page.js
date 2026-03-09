@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
+import Icon from '@/components/Icon';
 import {
     getSessions,
     getCompanies,
@@ -126,7 +127,7 @@ export default function HistoryPage() {
                         ＋ Manual Entry
                     </button>
                     <button className="btn btn-primary" onClick={handleExportCSV} disabled={sessions.length === 0}>
-                        📥 Export CSV
+                        <Icon name="download" size={14} /> Export CSV
                     </button>
                 </div>
             </div>
@@ -198,7 +199,7 @@ export default function HistoryPage() {
             {/* Session List */}
             {sessions.length === 0 ? (
                 <div className="empty-state">
-                    <div className="emoji">📋</div>
+                    <div className="empty-state-icon"><Icon name="clipboard" size={48} /></div>
                     <h3>No sessions yet</h3>
                     <p>Start tracking time on the Timer page, or add a manual entry above.</p>
                 </div>
@@ -235,7 +236,7 @@ export default function HistoryPage() {
                                         </div>
                                     </div>
                                     <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={() => handleDelete(session.id)}>
-                                        🗑
+                                        <Icon name="trash" size={14} />
                                     </button>
                                 </div>
                             ))}

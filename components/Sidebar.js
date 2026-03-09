@@ -5,14 +5,15 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
+import Icon from '@/components/Icon';
 
 const NAV_ITEMS = [
-    { href: '/', label: 'Timer', icon: '⏱' },
-    { href: '/projects', label: 'Projects', icon: '📂' },
-    { href: '/history', label: 'History', icon: '📋' },
-    { href: '/stats', label: 'Stats', icon: '📊' },
-    { href: '/agent', label: 'AI Agent', icon: '🤖' },
-    { href: '/settings', label: 'Settings', icon: '⚙️' },
+    { href: '/', label: 'Timer', icon: 'timer' },
+    { href: '/projects', label: 'Projects', icon: 'folder' },
+    { href: '/history', label: 'History', icon: 'clipboard' },
+    { href: '/stats', label: 'Stats', icon: 'chart' },
+    { href: '/agent', label: 'AI Agent', icon: 'robot' },
+    { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 export default function Sidebar() {
@@ -40,7 +41,7 @@ export default function Sidebar() {
                     onClick={() => setMobileOpen(!mobileOpen)}
                     aria-label="Toggle menu"
                 >
-                    {mobileOpen ? '✕' : '☰'}
+                    {mobileOpen ? <Icon name="close" size={22} /> : <Icon name="menu" size={22} />}
                 </button>
             </div>
 
@@ -65,7 +66,7 @@ export default function Sidebar() {
                             className={`nav-link ${pathname === item.href ? 'active' : ''}`}
                             onClick={() => setMobileOpen(false)}
                         >
-                            <span className="nav-icon">{item.icon}</span>
+                            <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
                             {item.label}
                         </Link>
                     ))}

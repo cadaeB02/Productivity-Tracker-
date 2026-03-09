@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
+import Icon from '@/components/Icon';
 import { getSessions, getCompanies } from '@/lib/store';
 import { generatePrioritySuggestions, chatWithAgent, hasApiKey } from '@/lib/gemini';
 import { formatDurationShort } from '@/lib/utils';
@@ -56,7 +57,7 @@ export default function AgentPage() {
         if (!hasKey) {
             setMessages((prev) => [...prev, {
                 role: 'assistant',
-                content: '⚠️ No Gemini API key found. Please add one in **Settings** first.',
+                content: 'No Gemini API key found. Please add one in **Settings** first.',
             }]);
             return;
         }
@@ -80,7 +81,7 @@ export default function AgentPage() {
         } catch (err) {
             setMessages((prev) => [...prev, {
                 role: 'assistant',
-                content: `❌ Error: ${err.message}`,
+                content: `Error: ${err.message}`,
             }]);
         }
         setLoading(false);
@@ -91,7 +92,7 @@ export default function AgentPage() {
         if (!hasKey) {
             setMessages((prev) => [...prev, {
                 role: 'assistant',
-                content: '⚠️ No Gemini API key found. Please add one in **Settings** first.',
+                content: 'No Gemini API key found. Please add one in **Settings** first.',
             }]);
             return;
         }
@@ -108,7 +109,7 @@ export default function AgentPage() {
         } catch (err) {
             setMessages((prev) => [...prev, {
                 role: 'assistant',
-                content: `❌ Error: ${err.message}`,
+                content: `Error: ${err.message}`,
             }]);
         }
         setLoading(false);
@@ -117,7 +118,7 @@ export default function AgentPage() {
     return (
         <AppLayout>
             <div className="page-header">
-                <h2>🤖 AI Agent</h2>
+                <h2><Icon name="robot" size={24} className="icon-inline" /> AI Agent</h2>
                 <p>Get AI-powered productivity insights and planning</p>
             </div>
 
@@ -141,7 +142,7 @@ export default function AgentPage() {
                         onClick={handlePlanSession}
                         disabled={loading}
                     >
-                        {loading ? '⏳ Thinking...' : '🎯 Plan My Next Session'}
+                        {loading ? <><Icon name="hourglass" size={14} /> Thinking...</> : <><Icon name="target" size={14} /> Plan My Next Session</>}
                     </button>
 
                     <button
@@ -159,7 +160,7 @@ export default function AgentPage() {
                 <div className="ai-chat" style={{ minHeight: '300px' }}>
                     {messages.length === 0 ? (
                         <div className="empty-state" style={{ padding: '40px 20px' }}>
-                            <div className="emoji">🧠</div>
+                            <div className="empty-state-icon"><Icon name="brain" size={48} /></div>
                             <h3>Your AI Productivity Coach</h3>
                             <p>Click &quot;Plan My Next Session&quot; to get task priorities based on your work history, or type a question below.</p>
                         </div>
