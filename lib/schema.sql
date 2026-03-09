@@ -42,6 +42,8 @@ CREATE TABLE sessions (
   summary TEXT DEFAULT '',
   ai_summary TEXT DEFAULT '',
   is_manual BOOLEAN DEFAULT false,
+  paused_at TIMESTAMPTZ,             -- timestamp when session was paused (null = not paused)
+  paused_duration INTEGER DEFAULT 0,  -- total seconds spent paused
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

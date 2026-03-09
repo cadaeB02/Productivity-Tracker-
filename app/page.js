@@ -3,13 +3,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import ClockOutModal from '@/components/ClockOutModal';
+import PendingSummariesModal from '@/components/PendingSummariesModal';
 import {
     getCompanies,
     getAllProjects,
     getAllTasks,
-    getActiveSession,
+    getActiveSessions,
     startSession,
     endSession,
+    pauseSession,
+    resumeSession,
 } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
 
@@ -17,10 +20,12 @@ export default function TimerPage() {
     const [companies, setCompanies] = useState([]);
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
-    const [activeSession, setActiveSession] = useState(null);
-    const [elapsed, setElapsed] = useState(0);
+    const [activeSessions, setActiveSessions] = useState([]);
+    const [elapsedMap, setElapsedMap] = useState({});
     const [showClockOut, setShowClockOut] = useState(false);
-    const [completedSession, setCompletedSession] = useState(null);
+    const [currentClockOutSession, setCurrentClockOutSession] = useState(null);
+    const [pendingSummaries, setPendingSummaries] = useState([]);
+    const [showPendingSummaries, setShowPendingSummaries] = useState(false);
     const [loading, setLoading] = useState(true);
     const timerRef = useRef(null);
 
@@ -30,17 +35,30 @@ export default function TimerPage() {
                 getCompanies(),
                 getAllProjects(),
                 getAllTasks(),
-                getActiveSession(),
+                getActiveSessions(),
             ]);
             setCompanies(c);
             setProjects(p);
             setTasks(t);
-            setActiveSession(active);
+            setActiveSessions(active);
 
-            if (active) {
-                const start = new Date(active.start_time).getTime();
-                setElapsed(Math.floor((Date.now() - start) / 1000));
-            }
+            // Initialize elapsed for each active session
+            const now = Date.now();
+            const newElapsed = {};
+            active.forEach((s) => {
+                if (s.paused_at) {
+                    // Paused: show time up to when it was paused, minus previous pauses
+                    const start = new Date(s.start_time).getTime();
+                    const pausedAt = new Date(s.paused_at).getTime();
+                    const pausedDur = (s.paused_duration || 0) * 1000;
+                    newElapsed[s.id] = Math.floor((pausedAt - start - pausedDur) / 1000);
+                } else {
+                    const start = new Date(s.start_time).getTime();
+                    const pausedDur = (s.paused_duration || 0) * 1000;
+                    newElapsed[s.id] = Math.floor((now - start - pausedDur) / 1000);
+                }
+            });
+            setElapsedMap(newElapsed);
         } catch (err) {
             console.error('Failed to load data', err);
         }
@@ -51,53 +69,116 @@ export default function TimerPage() {
         loadData();
     }, [loadData]);
 
-    // Timer interval
+    // Timer interval — ticks all non-paused sessions
     useEffect(() => {
-        if (activeSession) {
+        if (activeSessions.length > 0) {
             timerRef.current = setInterval(() => {
-                const start = new Date(activeSession.start_time).getTime();
-                setElapsed(Math.floor((Date.now() - start) / 1000));
+                const now = Date.now();
+                setElapsedMap((prev) => {
+                    const next = { ...prev };
+                    activeSessions.forEach((s) => {
+                        if (!s.paused_at) {
+                            const start = new Date(s.start_time).getTime();
+                            const pausedDur = (s.paused_duration || 0) * 1000;
+                            next[s.id] = Math.floor((now - start - pausedDur) / 1000);
+                        }
+                    });
+                    return next;
+                });
             }, 1000);
         } else {
-            setElapsed(0);
+            setElapsedMap({});
         }
         return () => clearInterval(timerRef.current);
-    }, [activeSession]);
+    }, [activeSessions]);
 
     const handleStartTask = async (task) => {
-        try {
-            // If there's an active session, end it first
-            if (activeSession) {
-                const ended = await endSession(activeSession.id);
-                setCompletedSession({ ...activeSession, ...ended });
-                setShowClockOut(true);
-            }
+        // Don't start if task already has an active session
+        const alreadyActive = activeSessions.find((s) => s.task_id === task.id);
+        if (alreadyActive) return;
 
-            const session = await startSession(task.id, task.project_id || task.projects?.id, task.company_id || task.projects?.company_id);
-            const active = await getActiveSession();
-            setActiveSession(active);
+        try {
+            await startSession(
+                task.id,
+                task.project_id || task.projects?.id,
+                task.company_id || task.projects?.company_id
+            );
+            const active = await getActiveSessions();
+            setActiveSessions(active);
+            // Initialize elapsed for new session
+            const now = Date.now();
+            const newElapsed = {};
+            active.forEach((s) => {
+                if (s.paused_at) {
+                    const start = new Date(s.start_time).getTime();
+                    const pausedAt = new Date(s.paused_at).getTime();
+                    const pausedDur = (s.paused_duration || 0) * 1000;
+                    newElapsed[s.id] = Math.floor((pausedAt - start - pausedDur) / 1000);
+                } else {
+                    const start = new Date(s.start_time).getTime();
+                    const pausedDur = (s.paused_duration || 0) * 1000;
+                    newElapsed[s.id] = Math.floor((now - start - pausedDur) / 1000);
+                }
+            });
+            setElapsedMap(newElapsed);
         } catch (err) {
             console.error('Failed to start session', err);
         }
     };
 
-    const handleStop = async () => {
-        if (!activeSession) return;
+    const handlePause = async (session) => {
         try {
-            const ended = await endSession(activeSession.id);
-            setCompletedSession({ ...activeSession, ...ended });
-            setActiveSession(null);
-            setElapsed(0);
-            clearInterval(timerRef.current);
+            await pauseSession(session.id);
+            const active = await getActiveSessions();
+            setActiveSessions(active);
+        } catch (err) {
+            console.error('Failed to pause session', err);
+        }
+    };
+
+    const handleResume = async (session) => {
+        try {
+            await resumeSession(session.id);
+            const active = await getActiveSessions();
+            setActiveSessions(active);
+        } catch (err) {
+            console.error('Failed to resume session', err);
+        }
+    };
+
+    const handleStop = async (session) => {
+        try {
+            const ended = await endSession(session.id);
+            const completedData = { ...session, ...ended, elapsed: elapsedMap[session.id] || 0 };
+            setCurrentClockOutSession(completedData);
             setShowClockOut(true);
+            // Refresh active sessions
+            const active = await getActiveSessions();
+            setActiveSessions(active);
         } catch (err) {
             console.error('Failed to end session', err);
         }
     };
 
-    const handleClockOutClose = () => {
+    const handleClockOutClose = (skipped = false) => {
+        if (skipped && currentClockOutSession) {
+            setPendingSummaries((prev) => [...prev, currentClockOutSession]);
+        }
         setShowClockOut(false);
-        setCompletedSession(null);
+        setCurrentClockOutSession(null);
+
+        // If no more active sessions and there are pending summaries, show the batch modal
+        if (activeSessions.length === 0 && (pendingSummaries.length > 0 || skipped)) {
+            setTimeout(() => {
+                setShowPendingSummaries(true);
+            }, 300);
+        }
+    };
+
+    const handlePendingSummariesClose = () => {
+        setShowPendingSummaries(false);
+        setPendingSummaries([]);
+        loadData();
     };
 
     // Group tasks by company → project
@@ -112,6 +193,10 @@ export default function TimerPage() {
         };
     });
 
+    // Active task IDs for highlighting
+    const activeTaskIds = new Set(activeSessions.map((s) => s.task_id));
+    const contextSwitchCount = activeSessions.length;
+
     if (loading) {
         return (
             <AppLayout>
@@ -124,65 +209,110 @@ export default function TimerPage() {
 
     return (
         <AppLayout>
-            <div className="page-header">
-                <h2>Timer</h2>
-                <p>Track your work session in real time</p>
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                    <h2>Timer</h2>
+                    <p>Track your work sessions in real time</p>
+                </div>
+                {contextSwitchCount > 1 && (
+                    <div className="context-switch-badge">
+                        🔀 Context Switches: {contextSwitchCount}
+                    </div>
+                )}
             </div>
 
-            {/* Timer Display */}
-            <div className="card" style={{ textAlign: 'center', padding: '48px 24px', position: 'relative', overflow: 'hidden' }}>
-                {/* Background glow when active */}
-                {activeSession && (
-                    <div style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: '400px',
-                        height: '400px',
-                        background: 'var(--gradient-glow)',
-                        borderRadius: '50%',
-                        pointerEvents: 'none',
-                    }} />
-                )}
+            {/* Active Sessions */}
+            {activeSessions.length > 0 && (
+                <div className="active-sessions-section">
+                    <h3 className="active-sessions-title">
+                        Active Sessions ({activeSessions.length})
+                    </h3>
+                    <div className="active-sessions-grid">
+                        {activeSessions.map((session) => {
+                            const isPaused = !!session.paused_at;
+                            const elapsed = elapsedMap[session.id] || 0;
+                            const taskName = session.tasks?.name || session.projects?.name || 'Task';
+                            const companyName = session.companies?.name || '';
+                            const companyColor = session.companies?.color || '#6366f1';
 
-                {activeSession ? (
-                    <>
-                        <div className="timer-task-label">Currently working on</div>
-                        <div className="timer-task-name">
-                            {activeSession.tasks?.name || activeSession.projects?.name || 'Task'}
-                            {activeSession.companies?.name && (
-                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginLeft: '8px' }}>
-                                    — {activeSession.companies.name}
-                                </span>
-                            )}
-                        </div>
-                        <div className="badge badge-active" style={{ marginBottom: '24px' }}>
-                            ● Recording
-                        </div>
-                    </>
-                ) : (
+                            return (
+                                <div
+                                    key={session.id}
+                                    className={`session-card ${isPaused ? 'paused' : 'running'}`}
+                                >
+                                    <div className="session-card-header">
+                                        <div className="session-card-info">
+                                            <div className={`badge ${isPaused ? 'badge-paused' : 'badge-active'}`}>
+                                                {isPaused ? '⏸ Paused' : '● Recording'}
+                                            </div>
+                                            <div className="session-card-task">{taskName}</div>
+                                            {companyName && (
+                                                <div className="session-card-company">
+                                                    <span className="color-dot" style={{ backgroundColor: companyColor }} />
+                                                    {companyName}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className={`session-card-timer ${isPaused ? 'paused' : 'active'}`}>
+                                        {formatDuration(elapsed)}
+                                    </div>
+                                    <div className="session-card-actions">
+                                        {isPaused ? (
+                                            <button
+                                                className="btn btn-resume btn-sm"
+                                                onClick={() => handleResume(session)}
+                                            >
+                                                ▶ Resume
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="btn btn-pause btn-sm"
+                                                onClick={() => handlePause(session)}
+                                            >
+                                                ⏸ Pause
+                                            </button>
+                                        )}
+                                        <button
+                                            className="btn btn-stop-sm btn-sm"
+                                            onClick={() => handleStop(session)}
+                                        >
+                                            ⏹ Stop
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* No active sessions prompt */}
+            {activeSessions.length === 0 && (
+                <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
                     <div style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.9rem' }}>
                         Select a task below to start tracking
                     </div>
-                )}
-
-                <div className={`timer-display ${activeSession ? 'active' : ''}`}>
-                    {formatDuration(elapsed)}
-                </div>
-
-                <div style={{ marginTop: '32px' }}>
-                    {activeSession ? (
-                        <button className="btn btn-stop" onClick={handleStop}>
-                            ⏹ Stop Working
-                        </button>
-                    ) : (
+                    <div className="timer-display">0:00:00</div>
+                    <div style={{ marginTop: '32px' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                             👇 Pick a task to start the timer
                         </div>
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {/* Pending summaries button */}
+            {pendingSummaries.length > 0 && (
+                <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowPendingSummaries(true)}
+                    >
+                        📋 {pendingSummaries.length} Pending {pendingSummaries.length === 1 ? 'Summary' : 'Summaries'}
+                    </button>
+                </div>
+            )}
 
             {/* Task Switcher */}
             <div className="task-switcher">
@@ -206,16 +336,28 @@ export default function TimerPage() {
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 0 2px 20px', fontWeight: 500 }}>
                                         {project.name}
                                     </div>
-                                    {project.tasks.map((task) => (
-                                        <div
-                                            key={task.id}
-                                            className={`task-item ${activeSession?.task_id === task.id ? 'active' : ''}`}
-                                            onClick={() => handleStartTask(task)}
-                                        >
-                                            <span>{task.name}</span>
-                                            <span className="play-icon">▶</span>
-                                        </div>
-                                    ))}
+                                    {project.tasks.map((task) => {
+                                        const isActive = activeTaskIds.has(task.id);
+                                        const activeSession = activeSessions.find((s) => s.task_id === task.id);
+                                        const elapsed = activeSession ? elapsedMap[activeSession.id] || 0 : 0;
+
+                                        return (
+                                            <div
+                                                key={task.id}
+                                                className={`task-item ${isActive ? 'active' : ''}`}
+                                                onClick={() => handleStartTask(task)}
+                                            >
+                                                <span>{task.name}</span>
+                                                {isActive ? (
+                                                    <span className="task-item-elapsed">
+                                                        {formatDuration(elapsed)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="play-icon">▶</span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                     {project.tasks.length === 0 && (
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '4px 12px 4px 32px', fontStyle: 'italic' }}>
                                             No tasks — add some in Projects
@@ -229,10 +371,20 @@ export default function TimerPage() {
             </div>
 
             {/* Clock Out Modal */}
-            {showClockOut && completedSession && (
+            {showClockOut && currentClockOutSession && (
                 <ClockOutModal
-                    session={completedSession}
+                    session={currentClockOutSession}
                     onClose={handleClockOutClose}
+                    onSaved={loadData}
+                    hasMoreSessions={activeSessions.length > 0}
+                />
+            )}
+
+            {/* Pending Summaries Modal */}
+            {showPendingSummaries && pendingSummaries.length > 0 && (
+                <PendingSummariesModal
+                    sessions={pendingSummaries}
+                    onClose={handlePendingSummariesClose}
                     onSaved={loadData}
                 />
             )}
