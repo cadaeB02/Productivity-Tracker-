@@ -74,6 +74,7 @@ export default function StatsPage() {
     const [companies, setCompanies] = useState([]);
     const [payEstimates, setPayEstimates] = useState([]);
     const [dateRange, setDateRange] = useState('week');
+    const [payFilter, setPayFilter] = useState('all'); // 'all' or a company ID
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState(null);
     const [tooltip, setTooltip] = useState(null);
@@ -88,7 +89,7 @@ export default function StatsPage() {
 
             const physicalCompanies = comps.filter(c => c.company_type === 'physical' && c.pay_rate);
             const estimates = await Promise.all(
-                physicalCompanies.map(c => getPayEstimate(c.id).catch(() => null))
+                physicalCompanies.map(c => getPayEstimate(c.id, dateRange).catch(() => null))
             );
             setPayEstimates(estimates.filter(Boolean));
         } catch (err) {
@@ -250,46 +251,80 @@ export default function StatsPage() {
             </div>
 
             {/* Paycheck Estimates */}
-            {payEstimates.length > 0 && (
-                <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Icon name="dollar" size={18} style={{ color: 'var(--color-success)' }} /> Paycheck Estimates
-                    </h3>
-                    {payEstimates.map((est, i) => (
-                        <div key={i} className="paycheck-card">
-                            <div className="paycheck-company">
-                                <div className="paycheck-company-dot" style={{ backgroundColor: est.companyColor }} />
-                                <span className="paycheck-company-name">{est.companyName}</span>
-                                <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    {est.payPeriod} • {est.daysUntilPayday}d until payday
+            {payEstimates.length > 0 && (() => {
+                const physicalCompanies = companies.filter(c => c.company_type === 'physical' && c.pay_rate);
+                const filteredEstimates = payFilter === 'all'
+                    ? payEstimates
+                    : payEstimates.filter(est => est.companyName === physicalCompanies.find(c => c.id === payFilter)?.name);
+
+                return (
+                    <div style={{ marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                <Icon name="dollar" size={18} style={{ color: 'var(--color-success)' }} /> Earnings
+                                <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>
+                                    ({payEstimates[0]?.periodLabel || dateRange})
                                 </span>
-                            </div>
-                            <div className="paycheck-grid">
-                                <div className="paycheck-stat">
-                                    <div className="paycheck-stat-label">Hours Worked</div>
-                                    <div className="paycheck-stat-value">{est.totalHours}h</div>
-                                </div>
-                                <div className="paycheck-stat">
-                                    <div className="paycheck-stat-label">Rate</div>
-                                    <div className="paycheck-stat-value">${est.payRate.toFixed(2)}/hr</div>
-                                </div>
-                                <div className="paycheck-stat">
-                                    <div className="paycheck-stat-label">Gross Pay</div>
-                                    <div className="paycheck-stat-value">${est.grossPay.toFixed(2)}</div>
-                                </div>
-                                <div className="paycheck-stat">
-                                    <div className="paycheck-stat-label">Taxes (Fed + State + FICA)</div>
-                                    <div className="paycheck-stat-value tax">-${est.totalTax.toFixed(2)}</div>
-                                </div>
-                                <div className="paycheck-stat full-width">
-                                    <div className="paycheck-stat-label">Estimated Take-Home</div>
-                                    <div className="paycheck-stat-value net">${est.netPay.toFixed(2)}</div>
-                                </div>
+                            </h3>
+                            <div className="flex gap-2 items-center">
+                                <button
+                                    className={`btn ${dateRange === 'payperiod' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                                    onClick={() => setDateRange('payperiod')}
+                                >
+                                    Pay Period
+                                </button>
+                                {physicalCompanies.length > 1 && (
+                                    <select
+                                        className="input"
+                                        style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }}
+                                        value={payFilter}
+                                        onChange={(e) => setPayFilter(e.target.value)}
+                                    >
+                                        <option value="all">All Companies</option>
+                                        {physicalCompanies.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                         </div>
-                    ))}
-                </div>
-            )}
+
+                        {filteredEstimates.map((est, i) => (
+                            <div key={i} className="paycheck-card">
+                                <div className="paycheck-company">
+                                    <div className="paycheck-company-dot" style={{ backgroundColor: est.companyColor }} />
+                                    <span className="paycheck-company-name">{est.companyName}</span>
+                                    <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        {est.periodLabel} • {est.daysUntilPayday}d left
+                                    </span>
+                                </div>
+                                <div className="paycheck-grid">
+                                    <div className="paycheck-stat">
+                                        <div className="paycheck-stat-label">Hours Worked</div>
+                                        <div className="paycheck-stat-value">{est.totalHours}h</div>
+                                    </div>
+                                    <div className="paycheck-stat">
+                                        <div className="paycheck-stat-label">Rate</div>
+                                        <div className="paycheck-stat-value">${est.payRate.toFixed(2)}/hr</div>
+                                    </div>
+                                    <div className="paycheck-stat">
+                                        <div className="paycheck-stat-label">Gross Pay</div>
+                                        <div className="paycheck-stat-value">${est.grossPay.toFixed(2)}</div>
+                                    </div>
+                                    <div className="paycheck-stat">
+                                        <div className="paycheck-stat-label">Taxes (Fed + State + FICA)</div>
+                                        <div className="paycheck-stat-value tax">-${est.totalTax.toFixed(2)}</div>
+                                    </div>
+                                    <div className="paycheck-stat full-width">
+                                        <div className="paycheck-stat-label">Estimated Take-Home</div>
+                                        <div className="paycheck-stat-value net">${est.netPay.toFixed(2)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                );
+            })()}
 
             {/* Company Breakdown */}
             <div className="card" style={{ marginBottom: '24px' }}>

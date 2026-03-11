@@ -96,16 +96,17 @@ export default function ProjectsPage() {
 
     const handleAddCompany = async () => {
         if (!newCompanyName.trim()) return;
+        const r = (v) => Math.round(parseFloat(v) * 100) / 100;
         const config = {
             company_type: newCompanyType,
-            pay_rate: newPayRate ? parseFloat(newPayRate) : null,
+            pay_rate: newPayRate ? r(newPayRate) : null,
             pay_type: newPayType,
             pay_period: newPayPeriod,
             pay_period_start: newPayPeriodStart || null,
-            tax_federal_rate: parseFloat(newTaxFederal) || 12,
-            tax_state_rate: parseFloat(newTaxState) || 4.4,
-            tax_fica_rate: parseFloat(newTaxFica) || 7.65,
-            tax_deductions_pretax: parseFloat(newTaxDeductions) || 0,
+            tax_federal_rate: r(newTaxFederal) || 12,
+            tax_state_rate: r(newTaxState) || 4.4,
+            tax_fica_rate: r(newTaxFica) || 7.65,
+            tax_deductions_pretax: r(newTaxDeductions) || 0,
         };
         await addCompany(newCompanyName.trim(), newCompanyColor, config);
         resetNewCompanyForm();
@@ -151,16 +152,17 @@ export default function ProjectsPage() {
     };
 
     const handleSavePayConfig = async (id) => {
+        const r = (v) => Math.round(parseFloat(v) * 100) / 100;
         await updateCompany(id, {
             company_type: editPayFields.company_type,
-            pay_rate: editPayFields.pay_rate ? parseFloat(editPayFields.pay_rate) : null,
+            pay_rate: editPayFields.pay_rate ? r(editPayFields.pay_rate) : null,
             pay_type: editPayFields.pay_type,
             pay_period: editPayFields.pay_period,
             pay_period_start: editPayFields.pay_period_start || null,
-            tax_federal_rate: parseFloat(editPayFields.tax_federal_rate) || 12,
-            tax_state_rate: parseFloat(editPayFields.tax_state_rate) || 4.4,
-            tax_fica_rate: parseFloat(editPayFields.tax_fica_rate) || 7.65,
-            tax_deductions_pretax: parseFloat(editPayFields.tax_deductions_pretax) || 0,
+            tax_federal_rate: r(editPayFields.tax_federal_rate) || 12,
+            tax_state_rate: r(editPayFields.tax_state_rate) || 4.4,
+            tax_fica_rate: r(editPayFields.tax_fica_rate) || 7.65,
+            tax_deductions_pretax: r(editPayFields.tax_deductions_pretax) || 0,
         });
         setEditingPayConfig(null);
         loadData();
