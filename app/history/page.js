@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
+import SessionDetailModal from '@/components/SessionDetailModal';
 import {
     getSessions,
     getCompanies,
@@ -23,6 +24,7 @@ export default function HistoryPage() {
     const [loading, setLoading] = useState(true);
     const [filterCompany, setFilterCompany] = useState('');
     const [showManualEntry, setShowManualEntry] = useState(false);
+    const [selectedSession, setSelectedSession] = useState(null);
 
     // Manual entry form
     const [manualCompany, setManualCompany] = useState('');
@@ -211,7 +213,12 @@ export default function HistoryPage() {
                         </div>
                         <div className="session-list">
                             {dateSessions.map((session) => (
-                                <div key={session.id} className="session-item">
+                                <div
+                                    key={session.id}
+                                    className="session-item"
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => setSelectedSession(session)}
+                                >
                                     <div className="session-color" style={{ backgroundColor: session.companies?.color || '#6366f1' }} />
                                     <div className="session-info">
                                         <div className="session-task">
@@ -235,7 +242,24 @@ export default function HistoryPage() {
                                             {session.end_time && ` — ${formatTime(session.end_time)}`}
                                         </div>
                                     </div>
-                                    <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={() => handleDelete(session.id)}>
+                                    <button
+                                        className="btn-icon"
+                                        title="Edit session"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedSession(session);
+                                        }}
+                                    >
+                                        <Icon name="edit" size={14} />
+                                    </button>
+                                    <button
+                                        className="btn-icon"
+                                        style={{ fontSize: '0.75rem' }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(session.id);
+                                        }}
+                                    >
                                         <Icon name="trash" size={14} />
                                     </button>
                                 </div>
@@ -243,6 +267,18 @@ export default function HistoryPage() {
                         </div>
                     </div>
                 ))
+            )}
+
+            {/* Session Detail Modal */}
+            {selectedSession && (
+                <SessionDetailModal
+                    session={selectedSession}
+                    onClose={() => setSelectedSession(null)}
+                    onSaved={() => {
+                        setSelectedSession(null);
+                        loadData();
+                    }}
+                />
             )}
         </AppLayout>
     );

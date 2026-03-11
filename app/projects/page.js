@@ -24,16 +24,29 @@ export default function ProjectsPage() {
     const [expanded, setExpanded] = useState({});
     const [loading, setLoading] = useState(true);
 
-    // New item states
+    // New company states
     const [newCompanyName, setNewCompanyName] = useState('');
     const [newCompanyColor, setNewCompanyColor] = useState(COMPANY_COLORS[0]);
     const [showNewCompany, setShowNewCompany] = useState(false);
+    const [newCompanyType, setNewCompanyType] = useState('digital');
+    const [newPayRate, setNewPayRate] = useState('');
+    const [newPayType, setNewPayType] = useState('hourly');
+    const [newPayPeriod, setNewPayPeriod] = useState('biweekly');
+    const [newPayPeriodStart, setNewPayPeriodStart] = useState('');
+    const [newTaxFederal, setNewTaxFederal] = useState('12');
+    const [newTaxState, setNewTaxState] = useState('4.4');
+    const [newTaxFica, setNewTaxFica] = useState('7.65');
+    const [newTaxDeductions, setNewTaxDeductions] = useState('0');
+
+    // Inline add states
     const [newProjectName, setNewProjectName] = useState({});
     const [newTaskName, setNewTaskName] = useState({});
 
     // Edit states
     const [editingCompany, setEditingCompany] = useState(null);
     const [editCompanyName, setEditCompanyName] = useState('');
+    const [editingPayConfig, setEditingPayConfig] = useState(null);
+    const [editPayFields, setEditPayFields] = useState({});
 
     const loadData = useCallback(async () => {
         try {
@@ -66,11 +79,36 @@ export default function ProjectsPage() {
         setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
     };
 
+    const resetNewCompanyForm = () => {
+        setNewCompanyName('');
+        setNewCompanyColor(COMPANY_COLORS[0]);
+        setNewCompanyType('digital');
+        setNewPayRate('');
+        setNewPayType('hourly');
+        setNewPayPeriod('biweekly');
+        setNewPayPeriodStart('');
+        setNewTaxFederal('12');
+        setNewTaxState('4.4');
+        setNewTaxFica('7.65');
+        setNewTaxDeductions('0');
+        setShowNewCompany(false);
+    };
+
     const handleAddCompany = async () => {
         if (!newCompanyName.trim()) return;
-        await addCompany(newCompanyName.trim(), newCompanyColor);
-        setNewCompanyName('');
-        setShowNewCompany(false);
+        const config = {
+            company_type: newCompanyType,
+            pay_rate: newPayRate ? parseFloat(newPayRate) : null,
+            pay_type: newPayType,
+            pay_period: newPayPeriod,
+            pay_period_start: newPayPeriodStart || null,
+            tax_federal_rate: parseFloat(newTaxFederal) || 12,
+            tax_state_rate: parseFloat(newTaxState) || 4.4,
+            tax_fica_rate: parseFloat(newTaxFica) || 7.65,
+            tax_deductions_pretax: parseFloat(newTaxDeductions) || 0,
+        };
+        await addCompany(newCompanyName.trim(), newCompanyColor, config);
+        resetNewCompanyForm();
         loadData();
     };
 
@@ -97,6 +135,37 @@ export default function ProjectsPage() {
         loadData();
     };
 
+    const handleOpenPayConfig = (company) => {
+        setEditingPayConfig(company.id);
+        setEditPayFields({
+            company_type: company.company_type || 'digital',
+            pay_rate: company.pay_rate || '',
+            pay_type: company.pay_type || 'hourly',
+            pay_period: company.pay_period || 'biweekly',
+            pay_period_start: company.pay_period_start || '',
+            tax_federal_rate: company.tax_federal_rate ?? 12,
+            tax_state_rate: company.tax_state_rate ?? 4.4,
+            tax_fica_rate: company.tax_fica_rate ?? 7.65,
+            tax_deductions_pretax: company.tax_deductions_pretax ?? 0,
+        });
+    };
+
+    const handleSavePayConfig = async (id) => {
+        await updateCompany(id, {
+            company_type: editPayFields.company_type,
+            pay_rate: editPayFields.pay_rate ? parseFloat(editPayFields.pay_rate) : null,
+            pay_type: editPayFields.pay_type,
+            pay_period: editPayFields.pay_period,
+            pay_period_start: editPayFields.pay_period_start || null,
+            tax_federal_rate: parseFloat(editPayFields.tax_federal_rate) || 12,
+            tax_state_rate: parseFloat(editPayFields.tax_state_rate) || 4.4,
+            tax_fica_rate: parseFloat(editPayFields.tax_fica_rate) || 7.65,
+            tax_deductions_pretax: parseFloat(editPayFields.tax_deductions_pretax) || 0,
+        });
+        setEditingPayConfig(null);
+        loadData();
+    };
+
     const handleDeleteCompany = async (id) => {
         if (!confirm('Delete this company and all its projects/tasks?')) return;
         await deleteCompany(id);
@@ -113,6 +182,106 @@ export default function ProjectsPage() {
         await deleteTask(id);
         loadData();
     };
+
+    // Reusable pay/tax config form
+    const renderPayConfig = (type, payRate, payType, payPeriod, payPeriodStart, taxFed, taxState, taxFica, taxDeductions, setField) => (
+        <>
+            {type === 'physical' && (
+                <div className="pay-config-section">
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '12px', color: 'var(--text-accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Icon name="dollar" size={14} /> Pay Configuration
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="input-group">
+                            <label>Pay Rate ($)</label>
+                            <input
+                                className="input"
+                                type="number"
+                                step="0.01"
+                                placeholder="e.g. 17.50"
+                                value={payRate}
+                                onChange={(e) => setField('pay_rate', e.target.value)}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>Pay Type</label>
+                            <select className="input" value={payType} onChange={(e) => setField('pay_type', e.target.value)}>
+                                <option value="hourly">Hourly</option>
+                                <option value="salary">Salary</option>
+                            </select>
+                        </div>
+                        <div className="input-group">
+                            <label>Pay Period</label>
+                            <select className="input" value={payPeriod} onChange={(e) => setField('pay_period', e.target.value)}>
+                                <option value="weekly">Weekly</option>
+                                <option value="biweekly">Biweekly</option>
+                                <option value="monthly">Monthly</option>
+                            </select>
+                        </div>
+                        <div className="input-group">
+                            <label>Period Start Date</label>
+                            <input
+                                className="input"
+                                type="date"
+                                value={payPeriodStart}
+                                onChange={(e) => setField('pay_period_start', e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '16px 0 12px', color: 'var(--text-accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Icon name="chart" size={14} /> Tax Configuration
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="input-group">
+                            <label>Federal Tax (%)</label>
+                            <input
+                                className="input"
+                                type="number"
+                                step="0.01"
+                                placeholder="12"
+                                value={taxFed}
+                                onChange={(e) => setField('tax_federal_rate', e.target.value)}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>State Tax (%) — CO</label>
+                            <input
+                                className="input"
+                                type="number"
+                                step="0.01"
+                                placeholder="4.4"
+                                value={taxState}
+                                onChange={(e) => setField('tax_state_rate', e.target.value)}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>FICA (SS + Medicare) (%)</label>
+                            <input
+                                className="input"
+                                type="number"
+                                step="0.01"
+                                placeholder="7.65"
+                                value={taxFica}
+                                onChange={(e) => setField('tax_fica_rate', e.target.value)}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>Pre-Tax Deductions ($)</label>
+                            <input
+                                className="input"
+                                type="number"
+                                step="0.01"
+                                placeholder="0"
+                                value={taxDeductions}
+                                onChange={(e) => setField('tax_deductions_pretax', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
 
     if (loading) {
         return (
@@ -140,18 +309,20 @@ export default function ProjectsPage() {
             {showNewCompany && (
                 <div className="card" style={{ marginBottom: '20px' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>New Company</h3>
+
                     <div className="input-group" style={{ marginBottom: '12px' }}>
                         <label>Company Name</label>
                         <input
                             className="input"
-                            placeholder="e.g. Acme Corp"
+                            placeholder="e.g. Golden Bike Shop"
                             value={newCompanyName}
                             onChange={(e) => setNewCompanyName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddCompany()}
                             autoFocus
                         />
                     </div>
-                    <div className="input-group" style={{ marginBottom: '16px' }}>
+
+                    <div className="input-group" style={{ marginBottom: '12px' }}>
                         <label>Color</label>
                         <div className="color-picker">
                             {COMPANY_COLORS.map((color) => (
@@ -164,9 +335,47 @@ export default function ProjectsPage() {
                             ))}
                         </div>
                     </div>
-                    <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+
+                    {/* Company Type Toggle */}
+                    <div className="input-group" style={{ marginBottom: '16px' }}>
+                        <label>Company Type</label>
+                        <div className="toggle-group">
+                            <button
+                                className={`toggle-btn ${newCompanyType === 'digital' ? 'active' : ''}`}
+                                onClick={() => setNewCompanyType('digital')}
+                            >
+                                <Icon name="monitor" size={14} /> Digital
+                            </button>
+                            <button
+                                className={`toggle-btn ${newCompanyType === 'physical' ? 'active' : ''}`}
+                                onClick={() => setNewCompanyType('physical')}
+                            >
+                                <Icon name="building" size={14} /> Physical
+                            </button>
+                        </div>
+                    </div>
+
+                    {renderPayConfig(
+                        newCompanyType, newPayRate, newPayType, newPayPeriod, newPayPeriodStart,
+                        newTaxFederal, newTaxState, newTaxFica, newTaxDeductions,
+                        (field, value) => {
+                            const setters = {
+                                pay_rate: setNewPayRate,
+                                pay_type: setNewPayType,
+                                pay_period: setNewPayPeriod,
+                                pay_period_start: setNewPayPeriodStart,
+                                tax_federal_rate: setNewTaxFederal,
+                                tax_state_rate: setNewTaxState,
+                                tax_fica_rate: setNewTaxFica,
+                                tax_deductions_pretax: setNewTaxDeductions,
+                            };
+                            setters[field]?.(value);
+                        }
+                    )}
+
+                    <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '16px' }}>
                         <button className="btn btn-primary" onClick={handleAddCompany}>Create</button>
-                        <button className="btn btn-ghost" onClick={() => setShowNewCompany(false)}>Cancel</button>
+                        <button className="btn btn-ghost" onClick={resetNewCompanyForm}>Cancel</button>
                     </div>
                 </div>
             )}
@@ -185,7 +394,8 @@ export default function ProjectsPage() {
                 <div className="companies-grid">
                     {companies.map((company) => {
                         const companyProjects = projectsByCompany[company.id] || [];
-                        const isExpanded = expanded[company.id] !== false; // default expanded
+                        const isExpanded = expanded[company.id] !== false;
+                        const isPhysical = company.company_type === 'physical';
 
                         return (
                             <div key={company.id} className="company-card">
@@ -207,10 +417,24 @@ export default function ProjectsPage() {
                                                 onClick={(e) => e.stopPropagation()}
                                             />
                                         ) : (
-                                            company.name
+                                            <>
+                                                {company.name}
+                                                {isPhysical && (
+                                                    <span className="badge badge-physical" style={{ marginLeft: '8px', fontSize: '0.65rem' }}>Physical</span>
+                                                )}
+                                            </>
                                         )}
                                     </h3>
                                     <div className="flex gap-2">
+                                        {isPhysical && (
+                                            <button
+                                                className="btn-icon"
+                                                title="Pay & Tax Config"
+                                                onClick={() => editingPayConfig === company.id ? setEditingPayConfig(null) : handleOpenPayConfig(company)}
+                                            >
+                                                <Icon name="dollar" size={14} />
+                                            </button>
+                                        )}
                                         <button
                                             className="btn-icon"
                                             title="Edit"
@@ -230,6 +454,68 @@ export default function ProjectsPage() {
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* Pay/Tax Config Panel */}
+                                {editingPayConfig === company.id && (
+                                    <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+                                        <div className="input-group" style={{ marginBottom: '12px' }}>
+                                            <label>Company Type</label>
+                                            <div className="toggle-group">
+                                                <button
+                                                    className={`toggle-btn ${editPayFields.company_type === 'digital' ? 'active' : ''}`}
+                                                    onClick={() => setEditPayFields(p => ({ ...p, company_type: 'digital' }))}
+                                                >
+                                                    <Icon name="monitor" size={14} /> Digital
+                                                </button>
+                                                <button
+                                                    className={`toggle-btn ${editPayFields.company_type === 'physical' ? 'active' : ''}`}
+                                                    onClick={() => setEditPayFields(p => ({ ...p, company_type: 'physical' }))}
+                                                >
+                                                    <Icon name="building" size={14} /> Physical
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {renderPayConfig(
+                                            editPayFields.company_type,
+                                            editPayFields.pay_rate,
+                                            editPayFields.pay_type,
+                                            editPayFields.pay_period,
+                                            editPayFields.pay_period_start,
+                                            editPayFields.tax_federal_rate,
+                                            editPayFields.tax_state_rate,
+                                            editPayFields.tax_fica_rate,
+                                            editPayFields.tax_deductions_pretax,
+                                            (field, value) => setEditPayFields(p => ({ ...p, [field]: value }))
+                                        )}
+
+                                        <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '12px' }}>
+                                            <button className="btn btn-primary btn-sm" onClick={() => handleSavePayConfig(company.id)}>Save</button>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => setEditingPayConfig(null)}>Cancel</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Pay summary badge for physical companies */}
+                                {isPhysical && company.pay_rate && editingPayConfig !== company.id && (
+                                    <div
+                                        style={{
+                                            padding: '8px 16px',
+                                            borderTop: '1px solid var(--border)',
+                                            fontSize: '0.8rem',
+                                            color: 'var(--text-secondary)',
+                                            display: 'flex',
+                                            gap: '12px',
+                                            flexWrap: 'wrap',
+                                            cursor: 'pointer',
+                                        }}
+                                        onClick={() => handleOpenPayConfig(company)}
+                                    >
+                                        <span><strong>${parseFloat(company.pay_rate).toFixed(2)}</strong>/hr</span>
+                                        <span>• {company.pay_period}</span>
+                                        <span>• Tax: {(parseFloat(company.tax_federal_rate || 12) + parseFloat(company.tax_state_rate || 4.4) + parseFloat(company.tax_fica_rate || 7.65)).toFixed(1)}%</span>
+                                    </div>
+                                )}
 
                                 {isExpanded && (
                                     <div className="company-card-body">

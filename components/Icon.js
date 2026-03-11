@@ -245,4 +245,38 @@ const ICONS = {
             <line x1="1" y1="1" x2="23" y2="23" />
         </>
     ),
+    dollar: (
+        <>
+            <line x1="12" y1="1" x2="12" y2="23" />
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </>
+    ),
+    monitor: (
+        <>
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+        </>
+    ),
+    check: (
+        <polyline points="20 6 9 17 4 12" />
+    ),
+    lock: (
+        <>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </>
+    ),
+    'chevron-down': (
+        <polyline points="6 9 12 15 18 9" />
+    ),
+    'chevron-up': (
+        <polyline points="18 15 12 9 6 15" />
+    ),
+    clock: (
+        <>
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+        </>
+    ),
 };
