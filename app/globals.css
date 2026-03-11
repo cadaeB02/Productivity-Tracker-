@@ -1396,6 +1396,30 @@ textarea.input {
   font-size: 0.85rem;
 }
 
+.auth-success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  color: var(--color-success);
+  font-size: 0.85rem;
+}
+
+.auth-toggle {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.auth-toggle:hover {
+  color: var(--text-accent);
+}
+
 /* ==================== LOADING ==================== */
 
 .loading-spinner {
