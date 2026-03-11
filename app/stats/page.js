@@ -219,26 +219,38 @@ export default function StatsPage() {
                             <div key={day} className="bar-chart-item">
                                 <div className="bar-chart-value">{hasData ? formatDurationShort(dayHours[i]) : ''}</div>
                                 {hasData && companyEntries.length > 1 ? (
-                                    /* Stacked bar */
-                                    <div className="stacked-bar" style={{ height: `${Math.max(totalPerc, 3)}%` }}>
-                                        {companyEntries.map(([name, data]) => {
-                                            const segHeight = dayHours[i] > 0 ? (data.seconds / dayHours[i]) * 100 : 0;
-                                            return (
-                                                <div
-                                                    key={name}
-                                                    className="stacked-bar-segment"
-                                                    style={{
-                                                        height: `${segHeight}%`,
-                                                        backgroundColor: data.color,
-                                                    }}
-                                                    data-tooltip={`${name}: ${formatDurationShort(data.seconds)}`}
-                                                    onClick={() => {
-                                                        const sess = sessions.find(s => s.companies?.name === name && new Date(s.start_time).getDay() === i);
-                                                        if (sess) setSelectedSession(sess);
-                                                    }}
-                                                />
-                                            );
-                                        })}
+                                    /* Stacked bar — use flex-grow for proportional segments */
+                                    <div
+                                        style={{
+                                            height: `${Math.max(totalPerc, 5)}%`,
+                                            width: '100%',
+                                            maxWidth: '60px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        {companyEntries.map(([name, data]) => (
+                                            <div
+                                                key={name}
+                                                style={{
+                                                    flexGrow: data.seconds,
+                                                    backgroundColor: data.color,
+                                                    minHeight: '3px',
+                                                    cursor: 'pointer',
+                                                    position: 'relative',
+                                                    transition: 'filter 0.15s ease',
+                                                }}
+                                                title={`${name}: ${formatDurationShort(data.seconds)}`}
+                                                onClick={() => {
+                                                    const sess = sessions.find(s => s.companies?.name === name && new Date(s.start_time).getDay() === i);
+                                                    if (sess) setSelectedSession(sess);
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(1.3)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.filter = ''}
+                                            />
+                                        ))}
                                     </div>
                                 ) : (
                                     /* Single bar */
