@@ -194,14 +194,7 @@ export default function ProjectsPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div className="input-group">
                             <label>Pay Rate ($)</label>
-                            <input
-                                className="input"
-                                type="number"
-                                step="0.01"
-                                placeholder="e.g. 17.50"
-                                value={payRate}
-                                onChange={(e) => setField('pay_rate', e.target.value)}
-                            />
+                            <input className="input" type="number" step="0.01" placeholder="e.g. 17.50" value={payRate} onChange={(e) => setField('pay_rate', e.target.value)} />
                         </div>
                         <div className="input-group">
                             <label>Pay Type</label>
@@ -220,12 +213,7 @@ export default function ProjectsPage() {
                         </div>
                         <div className="input-group">
                             <label>Period Start Date</label>
-                            <input
-                                className="input"
-                                type="date"
-                                value={payPeriodStart}
-                                onChange={(e) => setField('pay_period_start', e.target.value)}
-                            />
+                            <input className="input" type="date" value={payPeriodStart} onChange={(e) => setField('pay_period_start', e.target.value)} />
                         </div>
                     </div>
 
@@ -235,47 +223,19 @@ export default function ProjectsPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div className="input-group">
                             <label>Federal Tax (%)</label>
-                            <input
-                                className="input"
-                                type="number"
-                                step="0.01"
-                                placeholder="12"
-                                value={taxFed}
-                                onChange={(e) => setField('tax_federal_rate', e.target.value)}
-                            />
+                            <input className="input" type="number" step="0.01" placeholder="12" value={taxFed} onChange={(e) => setField('tax_federal_rate', e.target.value)} />
                         </div>
                         <div className="input-group">
                             <label>State Tax (%) — CO</label>
-                            <input
-                                className="input"
-                                type="number"
-                                step="0.01"
-                                placeholder="4.4"
-                                value={taxState}
-                                onChange={(e) => setField('tax_state_rate', e.target.value)}
-                            />
+                            <input className="input" type="number" step="0.01" placeholder="4.4" value={taxState} onChange={(e) => setField('tax_state_rate', e.target.value)} />
                         </div>
                         <div className="input-group">
                             <label>FICA (SS + Medicare) (%)</label>
-                            <input
-                                className="input"
-                                type="number"
-                                step="0.01"
-                                placeholder="7.65"
-                                value={taxFica}
-                                onChange={(e) => setField('tax_fica_rate', e.target.value)}
-                            />
+                            <input className="input" type="number" step="0.01" placeholder="7.65" value={taxFica} onChange={(e) => setField('tax_fica_rate', e.target.value)} />
                         </div>
                         <div className="input-group">
                             <label>Pre-Tax Deductions ($)</label>
-                            <input
-                                className="input"
-                                type="number"
-                                step="0.01"
-                                placeholder="0"
-                                value={taxDeductions}
-                                onChange={(e) => setField('tax_deductions_pretax', e.target.value)}
-                            />
+                            <input className="input" type="number" step="0.01" placeholder="0" value={taxDeductions} onChange={(e) => setField('tax_deductions_pretax', e.target.value)} />
                         </div>
                     </div>
                 </div>
@@ -307,19 +267,32 @@ export default function ProjectsPage() {
 
             {/* New Company Form */}
             {showNewCompany && (
-                <div className="card" style={{ marginBottom: '20px' }}>
+                <div className="card" style={{ marginBottom: '16px' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>New Company</h3>
 
-                    <div className="input-group" style={{ marginBottom: '12px' }}>
-                        <label>Company Name</label>
-                        <input
-                            className="input"
-                            placeholder="e.g. Golden Bike Shop"
-                            value={newCompanyName}
-                            onChange={(e) => setNewCompanyName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddCompany()}
-                            autoFocus
-                        />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div className="input-group">
+                            <label>Company Name</label>
+                            <input
+                                className="input"
+                                placeholder="e.g. Golden Bike Shop"
+                                value={newCompanyName}
+                                onChange={(e) => setNewCompanyName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddCompany()}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>Company Type</label>
+                            <div className="toggle-group">
+                                <button className={`toggle-btn ${newCompanyType === 'digital' ? 'active' : ''}`} onClick={() => setNewCompanyType('digital')}>
+                                    <Icon name="monitor" size={14} /> Digital
+                                </button>
+                                <button className={`toggle-btn ${newCompanyType === 'physical' ? 'active' : ''}`} onClick={() => setNewCompanyType('physical')}>
+                                    <Icon name="building" size={14} /> Physical
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="input-group" style={{ marginBottom: '12px' }}>
@@ -336,38 +309,14 @@ export default function ProjectsPage() {
                         </div>
                     </div>
 
-                    {/* Company Type Toggle */}
-                    <div className="input-group" style={{ marginBottom: '16px' }}>
-                        <label>Company Type</label>
-                        <div className="toggle-group">
-                            <button
-                                className={`toggle-btn ${newCompanyType === 'digital' ? 'active' : ''}`}
-                                onClick={() => setNewCompanyType('digital')}
-                            >
-                                <Icon name="monitor" size={14} /> Digital
-                            </button>
-                            <button
-                                className={`toggle-btn ${newCompanyType === 'physical' ? 'active' : ''}`}
-                                onClick={() => setNewCompanyType('physical')}
-                            >
-                                <Icon name="building" size={14} /> Physical
-                            </button>
-                        </div>
-                    </div>
-
                     {renderPayConfig(
                         newCompanyType, newPayRate, newPayType, newPayPeriod, newPayPeriodStart,
                         newTaxFederal, newTaxState, newTaxFica, newTaxDeductions,
                         (field, value) => {
                             const setters = {
-                                pay_rate: setNewPayRate,
-                                pay_type: setNewPayType,
-                                pay_period: setNewPayPeriod,
-                                pay_period_start: setNewPayPeriodStart,
-                                tax_federal_rate: setNewTaxFederal,
-                                tax_state_rate: setNewTaxState,
-                                tax_fica_rate: setNewTaxFica,
-                                tax_deductions_pretax: setNewTaxDeductions,
+                                pay_rate: setNewPayRate, pay_type: setNewPayType, pay_period: setNewPayPeriod,
+                                pay_period_start: setNewPayPeriodStart, tax_federal_rate: setNewTaxFederal,
+                                tax_state_rate: setNewTaxState, tax_fica_rate: setNewTaxFica, tax_deductions_pretax: setNewTaxDeductions,
                             };
                             setters[field]?.(value);
                         }
@@ -380,35 +329,39 @@ export default function ProjectsPage() {
                 </div>
             )}
 
-            {/* Companies List */}
+            {/* Companies List — Accordion */}
             {companies.length === 0 && !showNewCompany ? (
                 <div className="empty-state">
                     <div className="empty-state-icon"><Icon name="building" size={48} /></div>
                     <h3>No companies yet</h3>
                     <p>Create your first company to start organizing your work and tracking time.</p>
-                    <button className="btn btn-primary" onClick={() => setShowNewCompany(true)}>
-                        + Create Company
-                    </button>
+                    <button className="btn btn-primary" onClick={() => setShowNewCompany(true)}>+ Create Company</button>
                 </div>
             ) : (
                 <div className="companies-grid">
                     {companies.map((company) => {
                         const companyProjects = projectsByCompany[company.id] || [];
-                        const isExpanded = expanded[company.id] !== false;
+                        const isOpen = expanded[company.id] === true;
                         const isPhysical = company.company_type === 'physical';
+                        const totalTasks = companyProjects.reduce((sum, p) => sum + (tasksByProject[p.id]?.length || 0), 0);
 
                         return (
                             <div key={company.id} className="company-card">
-                                <div className="company-card-header">
-                                    <h3
-                                        onClick={() => toggleExpanded(company.id)}
-                                        style={{ cursor: 'pointer', flex: 1 }}
-                                    >
+                                {/* Collapsed Header — always visible */}
+                                <div
+                                    className="company-card-header"
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => toggleExpanded(company.id)}
+                                >
+                                    <h3 style={{ flex: 1 }}>
+                                        <Icon name={isOpen ? 'chevron-down' : 'chevron-down'} size={14}
+                                            style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s ease' }}
+                                        />
                                         <span className="color-dot" style={{ backgroundColor: company.color, width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block' }} />
                                         {editingCompany === company.id ? (
                                             <input
                                                 className="input"
-                                                style={{ padding: '4px 8px', fontSize: '0.9rem', width: '140px' }}
+                                                style={{ padding: '4px 8px', fontSize: '0.9rem', width: '180px' }}
                                                 value={editCompanyName}
                                                 onChange={(e) => setEditCompanyName(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleEditCompany(company.id)}
@@ -417,39 +370,29 @@ export default function ProjectsPage() {
                                                 onClick={(e) => e.stopPropagation()}
                                             />
                                         ) : (
-                                            <>
-                                                {company.name}
-                                                {isPhysical && (
-                                                    <span className="badge badge-physical" style={{ marginLeft: '8px', fontSize: '0.65rem' }}>Physical</span>
-                                                )}
-                                            </>
+                                            <span>{company.name}</span>
                                         )}
+                                        {isPhysical && <span className="badge badge-physical">Physical</span>}
                                     </h3>
-                                    <div className="flex gap-2">
+
+                                    <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '4px' }}>
+                                            {companyProjects.length} projects • {totalTasks} tasks
+                                        </span>
+                                        {isPhysical && company.pay_rate && (
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+                                                ${parseFloat(company.pay_rate).toFixed(2)}/hr
+                                            </span>
+                                        )}
                                         {isPhysical && (
-                                            <button
-                                                className="btn-icon"
-                                                title="Pay & Tax Config"
-                                                onClick={() => editingPayConfig === company.id ? setEditingPayConfig(null) : handleOpenPayConfig(company)}
-                                            >
+                                            <button className="btn-icon" title="Pay & Tax Config" onClick={() => editingPayConfig === company.id ? setEditingPayConfig(null) : handleOpenPayConfig(company)}>
                                                 <Icon name="dollar" size={14} />
                                             </button>
                                         )}
-                                        <button
-                                            className="btn-icon"
-                                            title="Edit"
-                                            onClick={() => {
-                                                setEditingCompany(company.id);
-                                                setEditCompanyName(company.name);
-                                            }}
-                                        >
+                                        <button className="btn-icon" title="Edit name" onClick={() => { setEditingCompany(company.id); setEditCompanyName(company.name); }}>
                                             <Icon name="edit" size={14} />
                                         </button>
-                                        <button
-                                            className="btn-icon"
-                                            title="Delete"
-                                            onClick={() => handleDeleteCompany(company.id)}
-                                        >
+                                        <button className="btn-icon" title="Delete" onClick={() => handleDeleteCompany(company.id)}>
                                             <Icon name="trash" size={14} />
                                         </button>
                                     </div>
@@ -461,34 +404,20 @@ export default function ProjectsPage() {
                                         <div className="input-group" style={{ marginBottom: '12px' }}>
                                             <label>Company Type</label>
                                             <div className="toggle-group">
-                                                <button
-                                                    className={`toggle-btn ${editPayFields.company_type === 'digital' ? 'active' : ''}`}
-                                                    onClick={() => setEditPayFields(p => ({ ...p, company_type: 'digital' }))}
-                                                >
+                                                <button className={`toggle-btn ${editPayFields.company_type === 'digital' ? 'active' : ''}`} onClick={() => setEditPayFields(p => ({ ...p, company_type: 'digital' }))}>
                                                     <Icon name="monitor" size={14} /> Digital
                                                 </button>
-                                                <button
-                                                    className={`toggle-btn ${editPayFields.company_type === 'physical' ? 'active' : ''}`}
-                                                    onClick={() => setEditPayFields(p => ({ ...p, company_type: 'physical' }))}
-                                                >
+                                                <button className={`toggle-btn ${editPayFields.company_type === 'physical' ? 'active' : ''}`} onClick={() => setEditPayFields(p => ({ ...p, company_type: 'physical' }))}>
                                                     <Icon name="building" size={14} /> Physical
                                                 </button>
                                             </div>
                                         </div>
-
                                         {renderPayConfig(
-                                            editPayFields.company_type,
-                                            editPayFields.pay_rate,
-                                            editPayFields.pay_type,
-                                            editPayFields.pay_period,
-                                            editPayFields.pay_period_start,
-                                            editPayFields.tax_federal_rate,
-                                            editPayFields.tax_state_rate,
-                                            editPayFields.tax_fica_rate,
-                                            editPayFields.tax_deductions_pretax,
+                                            editPayFields.company_type, editPayFields.pay_rate, editPayFields.pay_type,
+                                            editPayFields.pay_period, editPayFields.pay_period_start, editPayFields.tax_federal_rate,
+                                            editPayFields.tax_state_rate, editPayFields.tax_fica_rate, editPayFields.tax_deductions_pretax,
                                             (field, value) => setEditPayFields(p => ({ ...p, [field]: value }))
                                         )}
-
                                         <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '12px' }}>
                                             <button className="btn btn-primary btn-sm" onClick={() => handleSavePayConfig(company.id)}>Save</button>
                                             <button className="btn btn-ghost btn-sm" onClick={() => setEditingPayConfig(null)}>Cancel</button>
@@ -496,28 +425,8 @@ export default function ProjectsPage() {
                                     </div>
                                 )}
 
-                                {/* Pay summary badge for physical companies */}
-                                {isPhysical && company.pay_rate && editingPayConfig !== company.id && (
-                                    <div
-                                        style={{
-                                            padding: '8px 16px',
-                                            borderTop: '1px solid var(--border)',
-                                            fontSize: '0.8rem',
-                                            color: 'var(--text-secondary)',
-                                            display: 'flex',
-                                            gap: '12px',
-                                            flexWrap: 'wrap',
-                                            cursor: 'pointer',
-                                        }}
-                                        onClick={() => handleOpenPayConfig(company)}
-                                    >
-                                        <span><strong>${parseFloat(company.pay_rate).toFixed(2)}</strong>/hr</span>
-                                        <span>• {company.pay_period}</span>
-                                        <span>• Tax: {(parseFloat(company.tax_federal_rate || 12) + parseFloat(company.tax_state_rate || 4.4) + parseFloat(company.tax_fica_rate || 7.65)).toFixed(1)}%</span>
-                                    </div>
-                                )}
-
-                                {isExpanded && (
+                                {/* Expanded Body — projects & tasks */}
+                                {isOpen && (
                                     <div className="company-card-body">
                                         {companyProjects.map((project) => {
                                             const projectTasks = tasksByProject[project.id] || [];
@@ -525,24 +434,13 @@ export default function ProjectsPage() {
 
                                             return (
                                                 <div key={project.id} style={{ marginBottom: '8px' }}>
-                                                    <div
-                                                        className="project-item"
-                                                        onClick={() => toggleExpanded(`p-${project.id}`)}
-                                                        style={{ cursor: 'pointer' }}
-                                                    >
+                                                    <div className="project-item" onClick={() => toggleExpanded(`p-${project.id}`)} style={{ cursor: 'pointer' }}>
                                                         <span className="project-name">
                                                             {projectExpanded ? '▾' : '▸'} {project.name}
                                                         </span>
                                                         <div className="flex gap-2 items-center">
                                                             <span className="project-tasks-count">{projectTasks.length} tasks</span>
-                                                            <button
-                                                                className="btn-icon"
-                                                                style={{ fontSize: '0.75rem' }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteProject(project.id);
-                                                                }}
-                                                            >
+                                                            <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}>
                                                                 <Icon name="close" size={12} />
                                                             </button>
                                                         </div>
@@ -553,17 +451,11 @@ export default function ProjectsPage() {
                                                             {projectTasks.map((task) => (
                                                                 <div key={task.id} className="project-item" style={{ fontSize: '0.8rem' }}>
                                                                     <span>• {task.name}</span>
-                                                                    <button
-                                                                        className="btn-icon"
-                                                                        style={{ fontSize: '0.7rem' }}
-                                                                        onClick={() => handleDeleteTask(task.id)}
-                                                                    >
+                                                                    <button className="btn-icon" style={{ fontSize: '0.7rem' }} onClick={() => handleDeleteTask(task.id)}>
                                                                         <Icon name="close" size={10} />
                                                                     </button>
                                                                 </div>
                                                             ))}
-
-                                                            {/* Add Task inline */}
                                                             <div className="add-inline">
                                                                 <input
                                                                     className="input"
@@ -573,12 +465,7 @@ export default function ProjectsPage() {
                                                                     onChange={(e) => setNewTaskName((prev) => ({ ...prev, [project.id]: e.target.value }))}
                                                                     onKeyDown={(e) => e.key === 'Enter' && handleAddTask(project.id, company.id)}
                                                                 />
-                                                                <button
-                                                                    className="btn btn-secondary btn-sm"
-                                                                    onClick={() => handleAddTask(project.id, company.id)}
-                                                                >
-                                                                    +
-                                                                </button>
+                                                                <button className="btn btn-secondary btn-sm" onClick={() => handleAddTask(project.id, company.id)}>+</button>
                                                             </div>
                                                         </div>
                                                     )}
@@ -596,12 +483,7 @@ export default function ProjectsPage() {
                                                 onChange={(e) => setNewProjectName((prev) => ({ ...prev, [company.id]: e.target.value }))}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleAddProject(company.id)}
                                             />
-                                            <button
-                                                className="btn btn-secondary btn-sm"
-                                                onClick={() => handleAddProject(company.id)}
-                                            >
-                                                +
-                                            </button>
+                                            <button className="btn btn-secondary btn-sm" onClick={() => handleAddProject(company.id)}>+</button>
                                         </div>
                                     </div>
                                 )}
