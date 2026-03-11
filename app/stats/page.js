@@ -15,9 +15,9 @@ function BarTooltip({ data, position }) {
             className="bar-tooltip"
             style={{
                 position: 'fixed',
-                left: position.x,
-                top: position.y - 8,
-                transform: 'translate(-50%, -100%)',
+                left: position.x + 16,
+                top: position.y,
+                transform: 'translateY(-50%)',
                 zIndex: 1000,
                 pointerEvents: 'none',
             }}
