@@ -1,11 +1,69 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import SessionDetailModal from '@/components/SessionDetailModal';
 import { getStats, getCompanies, getPayEstimate } from '@/lib/store';
-import { formatDurationShort } from '@/lib/utils';
+import { formatDurationShort, formatTime } from '@/lib/utils';
+
+// Rich tooltip component — appears instantly on hover
+function BarTooltip({ data, position }) {
+    if (!data) return null;
+    return (
+        <div
+            className="bar-tooltip"
+            style={{
+                position: 'fixed',
+                left: position.x,
+                top: position.y - 8,
+                transform: 'translate(-50%, -100%)',
+                zIndex: 1000,
+                pointerEvents: 'none',
+            }}
+        >
+            <div className="bar-tooltip-header">
+                <span className="bar-tooltip-dot" style={{ backgroundColor: data.color }} />
+                <strong>{data.companyName}</strong>
+            </div>
+            <div className="bar-tooltip-stat">
+                <span>Total</span>
+                <span className="bar-tooltip-value">{formatDurationShort(data.totalSeconds)}</span>
+            </div>
+            {data.sessionCount > 0 && (
+                <div className="bar-tooltip-stat">
+                    <span>Sessions</span>
+                    <span>{data.sessionCount}</span>
+                </div>
+            )}
+            {data.timeRange && (
+                <div className="bar-tooltip-stat">
+                    <span>Time</span>
+                    <span>{data.timeRange}</span>
+                </div>
+            )}
+            {data.tasks && data.tasks.length > 0 && (
+                <div className="bar-tooltip-tasks">
+                    {data.tasks.slice(0, 3).map((t, i) => (
+                        <div key={i} className="bar-tooltip-task">
+                            <span className="bar-tooltip-task-name">{t.name}</span>
+                            <span className="bar-tooltip-task-dur">{formatDurationShort(t.duration)}</span>
+                        </div>
+                    ))}
+                    {data.tasks.length > 3 && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            +{data.tasks.length - 3} more...
+                        </div>
+                    )}
+                </div>
+            )}
+            {data.summary && (
+                <div className="bar-tooltip-summary">{data.summary}</div>
+            )}
+            <div className="bar-tooltip-hint">Click for details</div>
+        </div>
+    );
+}
 
 export default function StatsPage() {
     const [sessions, setSessions] = useState([]);
@@ -14,6 +72,8 @@ export default function StatsPage() {
     const [dateRange, setDateRange] = useState('week');
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState(null);
+    const [tooltip, setTooltip] = useState(null);
+    const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
     const loadStats = useCallback(async () => {
         setLoading(true);
@@ -22,7 +82,6 @@ export default function StatsPage() {
             setSessions(data);
             setCompanies(comps);
 
-            // Load pay estimates for companies with pay rates
             const physicalCompanies = comps.filter(c => c.company_type === 'physical' && c.pay_rate);
             const estimates = await Promise.all(
                 physicalCompanies.map(c => getPayEstimate(c.id).catch(() => null))
@@ -38,12 +97,73 @@ export default function StatsPage() {
         loadStats();
     }, [loadStats]);
 
+    // Build tooltip data for a company on a specific day
+    const getTooltipData = (companyName, dayIndex) => {
+        const daySessions = dayIndex !== undefined
+            ? sessions.filter(s => (s.companies?.name || 'Unknown') === companyName && new Date(s.start_time).getDay() === dayIndex)
+            : sessions.filter(s => (s.companies?.name || 'Unknown') === companyName);
+
+        if (daySessions.length === 0) return null;
+
+        const totalSeconds = daySessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+        const color = daySessions[0]?.companies?.color || '#6366f1';
+
+        // Time range
+        const sorted = [...daySessions].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        const earliest = sorted[0];
+        const latest = sorted[sorted.length - 1];
+        const timeRange = earliest && latest?.end_time
+            ? `${formatTime(earliest.start_time)} — ${formatTime(latest.end_time)}`
+            : earliest ? `${formatTime(earliest.start_time)}` : null;
+
+        // Task breakdown
+        const taskMap = {};
+        daySessions.forEach(s => {
+            const taskName = s.tasks?.name || s.projects?.name || 'Work';
+            if (!taskMap[taskName]) taskMap[taskName] = 0;
+            taskMap[taskName] += s.duration || 0;
+        });
+        const tasks = Object.entries(taskMap)
+            .map(([name, duration]) => ({ name, duration }))
+            .sort((a, b) => b.duration - a.duration);
+
+        // Summary — use the first AI summary or user summary we find
+        const summarySession = daySessions.find(s => s.ai_summary) || daySessions.find(s => s.summary);
+        const summary = summarySession?.ai_summary || summarySession?.summary || null;
+        const truncatedSummary = summary && summary.length > 100 ? summary.slice(0, 100) + '...' : summary;
+
+        return {
+            companyName,
+            color,
+            totalSeconds,
+            sessionCount: daySessions.length,
+            timeRange,
+            tasks,
+            summary: truncatedSummary,
+        };
+    };
+
+    const handleBarHover = (e, companyName, dayIndex) => {
+        const data = getTooltipData(companyName, dayIndex);
+        if (data) {
+            setTooltip(data);
+            setTooltipPos({ x: e.clientX, y: e.clientY });
+        }
+    };
+
+    const handleBarMove = (e) => {
+        setTooltipPos({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleBarLeave = () => {
+        setTooltip(null);
+    };
+
     // Calculate stats
     const totalSeconds = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
     const totalSessions = sessions.length;
     const avgSessionSeconds = totalSessions > 0 ? Math.round(totalSeconds / totalSessions) : 0;
 
-    // Hours by company
     const companyHours = {};
     const companyColors = {};
     sessions.forEach((s) => {
@@ -51,13 +171,11 @@ export default function StatsPage() {
         companyHours[name] = (companyHours[name] || 0) + (s.duration || 0);
         companyColors[name] = s.companies?.color || '#6366f1';
     });
-
     const maxHours = Math.max(...Object.values(companyHours), 1);
 
-    // Stacked hours by day of week
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dayHours = [0, 0, 0, 0, 0, 0, 0];
-    const dayCompanyHours = [{}, {}, {}, {}, {}, {}, {}]; // per-day per-company breakdown
+    const dayCompanyHours = [{}, {}, {}, {}, {}, {}, {}];
     sessions.forEach((s) => {
         const day = new Date(s.start_time).getDay();
         const companyName = s.companies?.name || 'Unknown';
@@ -70,10 +188,7 @@ export default function StatsPage() {
     });
     const maxDayHours = Math.max(...dayHours, 1);
 
-    // Most productive day
     const mostProductiveDay = dayHours.indexOf(Math.max(...dayHours));
-
-    // Longest session
     const longestSession = sessions.reduce((max, s) => (s.duration || 0) > (max?.duration || 0) ? s : max, null);
 
     if (loading) {
@@ -192,8 +307,10 @@ export default function StatsPage() {
                                             height: `${Math.max(percentage, 3)}%`,
                                             backgroundColor: companyColors[name],
                                         }}
+                                        onMouseEnter={(e) => handleBarHover(e, name)}
+                                        onMouseMove={handleBarMove}
+                                        onMouseLeave={handleBarLeave}
                                         onClick={() => {
-                                            // Find a session from this company to show
                                             const sess = sessions.find(s => s.companies?.name === name);
                                             if (sess) setSelectedSession(sess);
                                         }}
@@ -219,7 +336,6 @@ export default function StatsPage() {
                             <div key={day} className="bar-chart-item">
                                 <div className="bar-chart-value">{hasData ? formatDurationShort(dayHours[i]) : ''}</div>
                                 {hasData && companyEntries.length > 1 ? (
-                                    /* Stacked bar — use flex-grow for proportional segments */
                                     <div
                                         style={{
                                             height: `${Math.max(totalPerc, 5)}%`,
@@ -239,21 +355,19 @@ export default function StatsPage() {
                                                     backgroundColor: data.color,
                                                     minHeight: '3px',
                                                     cursor: 'pointer',
-                                                    position: 'relative',
                                                     transition: 'filter 0.15s ease',
                                                 }}
-                                                title={`${name}: ${formatDurationShort(data.seconds)}`}
+                                                onMouseEnter={(e) => handleBarHover(e, name, i)}
+                                                onMouseMove={handleBarMove}
+                                                onMouseLeave={handleBarLeave}
                                                 onClick={() => {
                                                     const sess = sessions.find(s => s.companies?.name === name && new Date(s.start_time).getDay() === i);
                                                     if (sess) setSelectedSession(sess);
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(1.3)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.filter = ''}
                                             />
                                         ))}
                                     </div>
                                 ) : (
-                                    /* Single bar */
                                     <div
                                         className="bar-chart-bar clickable"
                                         style={{
@@ -262,6 +376,11 @@ export default function StatsPage() {
                                                 ? (companyEntries[0]?.[1]?.color || 'var(--gradient-accent)')
                                                 : 'var(--bg-elevated)',
                                         }}
+                                        onMouseEnter={(e) => {
+                                            if (hasData && companyEntries[0]) handleBarHover(e, companyEntries[0][0], i);
+                                        }}
+                                        onMouseMove={handleBarMove}
+                                        onMouseLeave={handleBarLeave}
                                         onClick={() => {
                                             if (hasData) {
                                                 const sess = sessions.find(s => new Date(s.start_time).getDay() === i);
@@ -284,7 +403,9 @@ export default function StatsPage() {
                     style={{ cursor: 'pointer' }}
                     onClick={() => setSelectedSession(longestSession)}
                 >
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="trophy" size={18} style={{ color: 'var(--color-warning)' }} /> Longest Session</h3>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Icon name="trophy" size={18} style={{ color: 'var(--color-warning)' }} /> Longest Session
+                    </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div className="session-color" style={{ backgroundColor: longestSession.companies?.color || '#6366f1' }} />
                         <div>
@@ -299,6 +420,9 @@ export default function StatsPage() {
                     </div>
                 </div>
             )}
+
+            {/* Tooltip */}
+            <BarTooltip data={tooltip} position={tooltipPos} />
 
             {/* Session Detail Modal */}
             {selectedSession && (

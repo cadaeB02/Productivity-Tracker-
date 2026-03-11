@@ -2059,3 +2059,105 @@ textarea.input {
   transform: scaleY(1.02);
   transform-origin: bottom;
 }
+
+/* ==================== V3 — RICH BAR TOOLTIP ==================== */
+
+.bar-tooltip {
+  background: rgba(15, 15, 25, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  min-width: 200px;
+  max-width: 280px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: tooltipIn 0.1s ease-out;
+}
+
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+.bar-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.bar-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bar-tooltip-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+
+.bar-tooltip-value {
+  font-weight: 600;
+  color: var(--text-accent);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.bar-tooltip-tasks {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bar-tooltip-task {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  padding: 2px 0;
+  color: var(--text-secondary);
+}
+
+.bar-tooltip-task-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.bar-tooltip-task-dur {
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.bar-tooltip-summary {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.bar-tooltip-hint {
+  margin-top: 6px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  text-align: center;
+}
