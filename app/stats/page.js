@@ -10,14 +10,18 @@ import { formatDurationShort, formatTime } from '@/lib/utils';
 // Rich tooltip component — appears instantly on hover
 function BarTooltip({ data, position }) {
     if (!data) return null;
+
+    // Flip to left side if near right edge of viewport
+    const nearRightEdge = typeof window !== 'undefined' && position.x > window.innerWidth - 300;
+
     return (
         <div
             className="bar-tooltip"
             style={{
                 position: 'fixed',
-                left: position.x + 16,
+                left: nearRightEdge ? position.x - 16 : position.x + 16,
                 top: position.y,
-                transform: 'translateY(-50%)',
+                transform: nearRightEdge ? 'translate(-100%, -50%)' : 'translateY(-50%)',
                 zIndex: 1000,
                 pointerEvents: 'none',
             }}
