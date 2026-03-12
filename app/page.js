@@ -14,8 +14,9 @@ import {
     endSession,
     pauseSession,
     resumeSession,
+    updateSession,
 } from '@/lib/store';
-import { formatDuration } from '@/lib/utils';
+import { formatDuration, formatTime } from '@/lib/utils';
 
 export default function TimerPage() {
     const [companies, setCompanies] = useState([]);
@@ -28,6 +29,7 @@ export default function TimerPage() {
     const [pendingSummaries, setPendingSummaries] = useState([]);
     const [showPendingSummaries, setShowPendingSummaries] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [editingStartTime, setEditingStartTime] = useState(null); // session id being edited
     const timerRef = useRef(null);
 
     const loadData = useCallback(async () => {
@@ -161,6 +163,28 @@ export default function TimerPage() {
         }
     };
 
+    const handleUpdateStartTime = async (session, newStartTimeStr) => {
+        try {
+            const newStart = new Date(newStartTimeStr);
+            if (isNaN(newStart.getTime())) return;
+            await updateSession(session.id, { start_time: newStart.toISOString() });
+            // Update local state immediately
+            setActiveSessions(prev => prev.map(s =>
+                s.id === session.id ? { ...s, start_time: newStart.toISOString() } : s
+            ));
+            // Recalculate elapsed
+            const now = Date.now();
+            const pausedDur = (session.paused_duration || 0) * 1000;
+            setElapsedMap(prev => ({
+                ...prev,
+                [session.id]: Math.floor((now - newStart.getTime() - pausedDur) / 1000)
+            }));
+            setEditingStartTime(null);
+        } catch (err) {
+            console.error('Failed to update start time', err);
+        }
+    };
+
     const handleClockOutClose = (skipped = false) => {
         if (skipped && currentClockOutSession) {
             setPendingSummaries((prev) => [...prev, currentClockOutSession]);
@@ -257,6 +281,31 @@ export default function TimerPage() {
                                     </div>
                                     <div className={`session-card-timer ${isPaused ? 'paused' : 'active'}`}>
                                         {formatDuration(elapsed)}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>Started:</span>
+                                        {editingStartTime === session.id ? (
+                                            <input
+                                                type="datetime-local"
+                                                className="input"
+                                                style={{ padding: '2px 6px', fontSize: '0.75rem', width: 'auto' }}
+                                                defaultValue={new Date(session.start_time).toISOString().slice(0, 16)}
+                                                onBlur={(e) => handleUpdateStartTime(session, e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleUpdateStartTime(session, e.target.value);
+                                                    if (e.key === 'Escape') setEditingStartTime(null);
+                                                }}
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <span
+                                                style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                                                onClick={() => setEditingStartTime(session.id)}
+                                                title="Click to change start time"
+                                            >
+                                                {formatTime(session.start_time)}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="session-card-actions">
                                         {isPaused ? (
