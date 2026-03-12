@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '@/components/Icon';
-import { updateSession, deleteSession } from '@/lib/store';
+import { updateSession, deleteSession, getCompanies, getProjects, getTasks } from '@/lib/store';
 import { formatDurationShort, formatDate, formatTime } from '@/lib/utils';
 
 export default function SessionDetailModal({ session, onClose, onSaved }) {
@@ -10,7 +10,62 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
     const [editFields, setEditFields] = useState({});
     const [saving, setSaving] = useState(false);
 
+    // For reassignment
+    const [companies, setCompanies] = useState([]);
+    const [projects, setProjects] = useState([]);
+    const [tasks, setTasks] = useState([]);
+
     if (!session) return null;
+
+    const loadPickerData = async (companyId) => {
+        try {
+            const comps = await getCompanies();
+            setCompanies(comps);
+
+            const cId = companyId || session.company_id;
+            if (cId) {
+                const projs = await getProjects(cId);
+                setProjects(projs);
+
+                // Load tasks for the selected or first project
+                const pId = session.project_id || projs[0]?.id;
+                if (pId) {
+                    const t = await getTasks(pId);
+                    setTasks(t);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load picker data', err);
+        }
+    };
+
+    const handleCompanyChange = async (companyId) => {
+        setEditFields(p => ({ ...p, company_id: companyId, project_id: '', task_id: '' }));
+        try {
+            const projs = await getProjects(companyId);
+            setProjects(projs);
+            setTasks([]);
+            if (projs.length > 0) {
+                setEditFields(p => ({ ...p, project_id: projs[0].id }));
+                const t = await getTasks(projs[0].id);
+                setTasks(t);
+                if (t.length > 0) setEditFields(p => ({ ...p, task_id: t[0].id }));
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleProjectChange = async (projectId) => {
+        setEditFields(p => ({ ...p, project_id: projectId, task_id: '' }));
+        try {
+            const t = await getTasks(projectId);
+            setTasks(t);
+            if (t.length > 0) setEditFields(p => ({ ...p, task_id: t[0].id }));
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const startEdit = () => {
         setEditing(true);
@@ -19,7 +74,11 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
             end_time: session.end_time ? new Date(session.end_time).toISOString().slice(0, 16) : '',
             summary: session.summary || '',
             ai_summary: session.ai_summary || '',
+            company_id: session.company_id || '',
+            project_id: session.project_id || '',
+            task_id: session.task_id || '',
         });
+        loadPickerData();
     };
 
     const handleSave = async () => {
@@ -38,6 +97,11 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
                 updates.end_time = end.toISOString();
                 updates.duration = Math.max(0, Math.floor((end - start) / 1000));
             }
+
+            // Reassignment
+            if (editFields.company_id) updates.company_id = editFields.company_id;
+            if (editFields.project_id) updates.project_id = editFields.project_id;
+            if (editFields.task_id) updates.task_id = editFields.task_id;
 
             await updateSession(session.id, updates);
             setEditing(false);
@@ -138,6 +202,52 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
                     ) : (
                         /* Edit Mode */
                         <>
+                            {/* Reassignment Section */}
+                            <div style={{ marginBottom: 16, padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                                <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '10px', color: 'var(--text-accent)' }}>
+                                    Reassign Session
+                                </h4>
+                                <div className="input-group" style={{ marginBottom: 8 }}>
+                                    <label>Company</label>
+                                    <select
+                                        className="input"
+                                        value={editFields.company_id}
+                                        onChange={(e) => handleCompanyChange(e.target.value)}
+                                    >
+                                        <option value="">—</option>
+                                        {companies.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="input-group" style={{ marginBottom: 8 }}>
+                                    <label>Project</label>
+                                    <select
+                                        className="input"
+                                        value={editFields.project_id}
+                                        onChange={(e) => handleProjectChange(e.target.value)}
+                                    >
+                                        <option value="">—</option>
+                                        {projects.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="input-group">
+                                    <label>Task</label>
+                                    <select
+                                        className="input"
+                                        value={editFields.task_id}
+                                        onChange={(e) => setEditFields(p => ({ ...p, task_id: e.target.value }))}
+                                    >
+                                        <option value="">—</option>
+                                        {tasks.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
                             <div className="input-group" style={{ marginBottom: 12 }}>
                                 <label>Start Time</label>
                                 <input

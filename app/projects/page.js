@@ -11,6 +11,8 @@ import {
     addProject,
     addTask,
     updateCompany,
+    updateProject,
+    updateTask,
     deleteCompany,
     deleteProject,
     deleteTask,
@@ -45,6 +47,10 @@ export default function ProjectsPage() {
     // Edit states
     const [editingCompany, setEditingCompany] = useState(null);
     const [editCompanyName, setEditCompanyName] = useState('');
+    const [editingProject, setEditingProject] = useState(null);
+    const [editProjectName, setEditProjectName] = useState('');
+    const [editingTask, setEditingTask] = useState(null);
+    const [editTaskName, setEditTaskName] = useState('');
     const [editingPayConfig, setEditingPayConfig] = useState(null);
     const [editPayFields, setEditPayFields] = useState({});
 
@@ -438,10 +444,40 @@ export default function ProjectsPage() {
                                                 <div key={project.id} style={{ marginBottom: '8px' }}>
                                                     <div className="project-item" onClick={() => toggleExpanded(`p-${project.id}`)} style={{ cursor: 'pointer' }}>
                                                         <span className="project-name">
-                                                            {projectExpanded ? '▾' : '▸'} {project.name}
+                                                            {projectExpanded ? '▾' : '▸'}{' '}
+                                                            {editingProject === project.id ? (
+                                                                <input
+                                                                    className="input"
+                                                                    style={{ padding: '2px 6px', fontSize: '0.8rem', width: '160px', display: 'inline' }}
+                                                                    value={editProjectName}
+                                                                    onChange={(e) => setEditProjectName(e.target.value)}
+                                                                    onKeyDown={async (e) => {
+                                                                        if (e.key === 'Enter' && editProjectName.trim()) {
+                                                                            await updateProject(project.id, { name: editProjectName.trim() });
+                                                                            setEditingProject(null);
+                                                                            loadData();
+                                                                        }
+                                                                        if (e.key === 'Escape') setEditingProject(null);
+                                                                    }}
+                                                                    onBlur={async () => {
+                                                                        if (editProjectName.trim() && editProjectName.trim() !== project.name) {
+                                                                            await updateProject(project.id, { name: editProjectName.trim() });
+                                                                            loadData();
+                                                                        }
+                                                                        setEditingProject(null);
+                                                                    }}
+                                                                    autoFocus
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            ) : (
+                                                                <span>{project.name}</span>
+                                                            )}
                                                         </span>
                                                         <div className="flex gap-2 items-center">
                                                             <span className="project-tasks-count">{projectTasks.length} tasks</span>
+                                                            <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); setEditingProject(project.id); setEditProjectName(project.name); }} title="Rename">
+                                                                <Icon name="edit" size={11} />
+                                                            </button>
                                                             <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}>
                                                                 <Icon name="close" size={12} />
                                                             </button>
@@ -452,10 +488,40 @@ export default function ProjectsPage() {
                                                         <div style={{ paddingLeft: '16px' }}>
                                                             {projectTasks.map((task) => (
                                                                 <div key={task.id} className="project-item" style={{ fontSize: '0.8rem' }}>
-                                                                    <span>• {task.name}</span>
-                                                                    <button className="btn-icon" style={{ fontSize: '0.7rem' }} onClick={() => handleDeleteTask(task.id)}>
-                                                                        <Icon name="close" size={10} />
-                                                                    </button>
+                                                                    {editingTask === task.id ? (
+                                                                        <input
+                                                                            className="input"
+                                                                            style={{ padding: '2px 6px', fontSize: '0.8rem', width: '160px' }}
+                                                                            value={editTaskName}
+                                                                            onChange={(e) => setEditTaskName(e.target.value)}
+                                                                            onKeyDown={async (e) => {
+                                                                                if (e.key === 'Enter' && editTaskName.trim()) {
+                                                                                    await updateTask(task.id, { name: editTaskName.trim() });
+                                                                                    setEditingTask(null);
+                                                                                    loadData();
+                                                                                }
+                                                                                if (e.key === 'Escape') setEditingTask(null);
+                                                                            }}
+                                                                            onBlur={async () => {
+                                                                                if (editTaskName.trim() && editTaskName.trim() !== task.name) {
+                                                                                    await updateTask(task.id, { name: editTaskName.trim() });
+                                                                                    loadData();
+                                                                                }
+                                                                                setEditingTask(null);
+                                                                            }}
+                                                                            autoFocus
+                                                                        />
+                                                                    ) : (
+                                                                        <span style={{ cursor: 'pointer' }} onClick={() => { setEditingTask(task.id); setEditTaskName(task.name); }}>• {task.name}</span>
+                                                                    )}
+                                                                    <div className="flex gap-1 items-center">
+                                                                        <button className="btn-icon" style={{ fontSize: '0.7rem' }} onClick={() => { setEditingTask(task.id); setEditTaskName(task.name); }} title="Rename">
+                                                                            <Icon name="edit" size={10} />
+                                                                        </button>
+                                                                        <button className="btn-icon" style={{ fontSize: '0.7rem' }} onClick={() => handleDeleteTask(task.id)}>
+                                                                            <Icon name="close" size={10} />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             ))}
                                                             <div className="add-inline">
