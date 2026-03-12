@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0f0f19"/>
+  <!-- Green parallelogram (front) -->
+  <polygon points="140,160 340,120 310,340 110,380" fill="#22c55e" opacity="0.9"/>
+  <!-- Purple parallelogram (back, offset) -->
+  <polygon points="200,170 400,130 370,350 170,390" fill="#a855f7" opacity="0.75"/>
+  <!-- Overlap intersection glow -->
+  <polygon points="200,170 340,135 310,340 170,375" fill="#6d28d9" opacity="0.35"/>
+</svg>

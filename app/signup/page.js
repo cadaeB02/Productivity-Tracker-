@@ -61,7 +61,7 @@ export default function SignupPage() {
     return (
         <div className="auth-page">
             <div className="auth-card">
-                <h1>FocusArch</h1>
+                <h1>Parallax</h1>
                 <p>Create your account to start tracking</p>
 
                 {error && <div className="auth-error">{error}</div>}

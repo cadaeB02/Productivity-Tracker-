@@ -61,7 +61,7 @@ export default function HistoryPage() {
 
     const handleExportCSV = () => {
         const csv = exportSessionsToCSV(sessions);
-        downloadCSV(csv, `focusarch-history-${new Date().toISOString().split('T')[0]}.csv`);
+        downloadCSV(csv, `parallax-history-${new Date().toISOString().split('T')[0]}.csv`);
     };
 
     const handleManualEntry = async () => {

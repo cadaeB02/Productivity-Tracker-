@@ -51,7 +51,7 @@ export default function SettingsPage() {
                 }
             } else {
                 // Migrate from localStorage if exists
-                const localKey = typeof window !== 'undefined' ? localStorage.getItem('focusarch_gemini_key') || '' : '';
+                const localKey = typeof window !== 'undefined' ? localStorage.getItem('parallax_gemini_key') || '' : '';
                 if (localKey) {
                     setGeminiKey(localKey);
                     setHasGemini(true);
@@ -60,7 +60,7 @@ export default function SettingsPage() {
         } catch (err) {
             console.error('Failed to load settings', err);
             // Fallback to localStorage
-            const localKey = typeof window !== 'undefined' ? localStorage.getItem('focusarch_gemini_key') || '' : '';
+            const localKey = typeof window !== 'undefined' ? localStorage.getItem('parallax_gemini_key') || '' : '';
             if (localKey) {
                 setGeminiKey(localKey);
                 setHasGemini(true);
@@ -147,7 +147,7 @@ export default function SettingsPage() {
         try {
             const sessions = await getSessions();
             const csv = exportSessionsToCSV(sessions);
-            downloadCSV(csv, `focusarch-full-export-${new Date().toISOString().split('T')[0]}.csv`);
+            downloadCSV(csv, `parallax-full-export-${new Date().toISOString().split('T')[0]}.csv`);
         } catch (err) {
             console.error('Export failed', err);
         }
@@ -159,7 +159,7 @@ export default function SettingsPage() {
             const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `focusarch-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.download = `parallax-backup-${new Date().toISOString().split('T')[0]}.json`;
             link.click();
             URL.revokeObjectURL(link.href);
         } catch (err) {
@@ -181,7 +181,7 @@ export default function SettingsPage() {
         <AppLayout>
             <div className="page-header">
                 <h2>Settings</h2>
-                <p>Configure your FocusArch experience</p>
+                <p>Configure your Parallax experience</p>
             </div>
 
             {/* Password Change */}
@@ -344,7 +344,7 @@ export default function SettingsPage() {
                                     <li>Your admin logs into <strong>When I Work</strong> on a desktop browser</li>
                                     <li>Navigate to <strong>Settings → Developer</strong> (or <strong>Account → API</strong>)</li>
                                     <li>Click <strong>&quot;Create New Key&quot;</strong> or <strong>&quot;Generate API Key&quot;</strong></li>
-                                    <li>Give the key a name like &quot;FocusArch Tracker&quot;</li>
+                                    <li>Give the key a name like &quot;Parallax Tracker&quot;</li>
                                     <li>Copy the generated key and paste it above</li>
                                 </ol>
                                 <p style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -382,7 +382,7 @@ export default function SettingsPage() {
                 <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <div style={{ fontWeight: 700, fontSize: '1rem' }}>FocusArch</div>
+                            <div style={{ fontWeight: 700, fontSize: '1rem' }}>Parallax</div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v3.0.0 — Productivity Tracker</div>
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

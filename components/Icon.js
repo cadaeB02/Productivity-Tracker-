@@ -1,5 +1,5 @@
 /**
- * Centralized SVG Icon component for FocusArch.
+ * Centralized SVG Icon component for Parallax.
  * Replaces all emoji usage with consistent, scalable inline SVGs.
  */
 

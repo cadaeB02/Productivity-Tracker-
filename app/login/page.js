@@ -81,7 +81,7 @@ export default function LoginPage() {
     return (
         <div className="auth-page">
             <div className="auth-card">
-                <h1>FocusArch</h1>
+                <h1>Parallax</h1>
                 <p>{mode === 'login' ? 'Sign in to track your productivity' : 'Create your account'}</p>
 
                 {error && <div className="auth-error">{error}</div>}

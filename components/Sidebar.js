@@ -54,7 +54,7 @@ export default function Sidebar() {
             {/* Sidebar */}
             <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
-                    <h1>FocusArch</h1>
+                    <h1>Parallax</h1>
                     <span>Productivity Tracker • V3.1</span>
                 </div>
 

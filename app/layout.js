@@ -2,8 +2,9 @@ import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 
 export const metadata = {
-    title: 'FocusArch — Productivity Tracker',
-    description: 'Track your work sessions and boost productivity',
+    title: 'Parallax — Productivity Tracker',
+    description: 'See your time from every angle. Track work across companies, projects, and contexts.',
+    icons: { icon: '/icon.svg' },
 };
 
 export default function RootLayout({ children }) {
