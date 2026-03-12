@@ -83,7 +83,7 @@ export default function TimerPage() {
                         if (!s.paused_at) {
                             const start = new Date(s.start_time).getTime();
                             const pausedDur = (s.paused_duration || 0) * 1000;
-                            next[s.id] = Math.floor((now - start - pausedDur) / 1000);
+                            next[s.id] = Math.max(0, Math.floor((now - start - pausedDur) / 1000));
                         }
                     });
                     return next;
@@ -163,21 +163,31 @@ export default function TimerPage() {
         }
     };
 
-    const handleUpdateStartTime = async (session, newStartTimeStr) => {
+    const handleUpdateStartTime = async (session, newTimeStr) => {
         try {
-            const newStart = new Date(newStartTimeStr);
-            if (isNaN(newStart.getTime())) return;
+            if (!newTimeStr) return;
+            // Build a local Date from just HH:MM — keep today's date
+            const [hours, minutes] = newTimeStr.split(':').map(Number);
+            const newStart = new Date();
+            newStart.setHours(hours, minutes, 0, 0);
+
+            // Don't allow future start times
+            const now = new Date();
+            if (newStart > now) {
+                setEditingStartTime(null);
+                return;
+            }
+
             await updateSession(session.id, { start_time: newStart.toISOString() });
             // Update local state immediately
             setActiveSessions(prev => prev.map(s =>
                 s.id === session.id ? { ...s, start_time: newStart.toISOString() } : s
             ));
             // Recalculate elapsed
-            const now = Date.now();
             const pausedDur = (session.paused_duration || 0) * 1000;
             setElapsedMap(prev => ({
                 ...prev,
-                [session.id]: Math.floor((now - newStart.getTime() - pausedDur) / 1000)
+                [session.id]: Math.max(0, Math.floor((Date.now() - newStart.getTime() - pausedDur) / 1000))
             }));
             setEditingStartTime(null);
         } catch (err) {
@@ -286,10 +296,13 @@ export default function TimerPage() {
                                         <span>Started:</span>
                                         {editingStartTime === session.id ? (
                                             <input
-                                                type="datetime-local"
+                                                type="time"
                                                 className="input"
                                                 style={{ padding: '2px 6px', fontSize: '0.75rem', width: 'auto' }}
-                                                defaultValue={new Date(session.start_time).toISOString().slice(0, 16)}
+                                                defaultValue={(() => {
+                                                    const d = new Date(session.start_time);
+                                                    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                                                })()}
                                                 onBlur={(e) => handleUpdateStartTime(session, e.target.value)}
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') handleUpdateStartTime(session, e.target.value);

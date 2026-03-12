@@ -85,35 +85,36 @@ export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessio
                             <div className="time-edit-group">
                                 <div className="time-edit-field">
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         className="input time-edit-input"
-                                        value={editHours}
-                                        onChange={(e) => setEditHours(Math.max(0, parseInt(e.target.value) || 0))}
-                                        min="0"
+                                        value={String(editHours)}
+                                        onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setEditHours(v === '' ? 0 : parseInt(v)); }}
+                                        onFocus={(e) => e.target.select()}
                                     />
                                     <span className="time-edit-unit">hrs</span>
                                 </div>
                                 <span className="time-edit-sep">:</span>
                                 <div className="time-edit-field">
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         className="input time-edit-input"
-                                        value={editMinutes}
-                                        onChange={(e) => setEditMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-                                        min="0"
-                                        max="59"
+                                        value={String(editMinutes)}
+                                        onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setEditMinutes(v === '' ? 0 : Math.min(59, parseInt(v))); }}
+                                        onFocus={(e) => e.target.select()}
                                     />
                                     <span className="time-edit-unit">min</span>
                                 </div>
                                 <span className="time-edit-sep">:</span>
                                 <div className="time-edit-field">
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         className="input time-edit-input"
-                                        value={editSeconds}
-                                        onChange={(e) => setEditSeconds(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-                                        min="0"
-                                        max="59"
+                                        value={String(editSeconds)}
+                                        onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setEditSeconds(v === '' ? 0 : Math.min(59, parseInt(v))); }}
+                                        onFocus={(e) => e.target.select()}
                                     />
                                     <span className="time-edit-unit">sec</span>
                                 </div>
