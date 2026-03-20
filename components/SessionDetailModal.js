@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Icon from '@/components/Icon';
 import { updateSession, deleteSession, getCompanies, getProjects, getTasks } from '@/lib/store';
-import { formatDurationShort, formatDate, formatTime } from '@/lib/utils';
+import { formatDurationShort, formatDate, formatTime, toLocalISOString } from '@/lib/utils';
 
 export default function SessionDetailModal({ session, onClose, onSaved }) {
     const [editing, setEditing] = useState(false);
@@ -70,8 +70,8 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
     const startEdit = () => {
         setEditing(true);
         setEditFields({
-            start_time: session.start_time ? new Date(session.start_time).toISOString().slice(0, 16) : '',
-            end_time: session.end_time ? new Date(session.end_time).toISOString().slice(0, 16) : '',
+            start_time: session.start_time ? toLocalISOString(session.start_time) : '',
+            end_time: session.end_time ? toLocalISOString(session.end_time) : '',
             summary: session.summary || '',
             ai_summary: session.ai_summary || '',
             company_id: session.company_id || '',

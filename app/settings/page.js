@@ -5,9 +5,12 @@ import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { createClient } from '@/lib/supabase/client';
 import { getUserSettings, saveUserSettings, getSessions, exportSessionsToCSV, downloadCSV } from '@/lib/store';
+import { useTheme } from '@/components/ThemeProvider';
 import { hasApiKey as hasLocalApiKey, setApiKey as setLocalApiKey, clearApiKey as clearLocalApiKey } from '@/lib/gemini';
 
 export default function SettingsPage() {
+    const { theme, setTheme } = useTheme();
+
     // Gemini
     const [geminiKey, setGeminiKey] = useState('');
     const [showGeminiKey, setShowGeminiKey] = useState(false);
@@ -182,6 +185,37 @@ export default function SettingsPage() {
             <div className="page-header">
                 <h2>Settings</h2>
                 <p>Configure your Parallax experience</p>
+            </div>
+
+            {/* Appearance */}
+            <div className="settings-section">
+                <h3><Icon name="palette" size={18} className="icon-inline" /> Appearance</h3>
+                <div className="card">
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                        Choose your preferred theme. Your selection is saved automatically.
+                    </p>
+
+                    <div className="theme-toggle-group">
+                        <button
+                            className={`theme-option ${theme === 'dark' ? 'active' : ''}`}
+                            onClick={() => setTheme('dark')}
+                        >
+                            <div className="theme-option-icon">
+                                <Icon name="moon" size={20} />
+                            </div>
+                            <span className="theme-option-label">Dark</span>
+                        </button>
+                        <button
+                            className={`theme-option ${theme === 'light' ? 'active' : ''}`}
+                            onClick={() => setTheme('light')}
+                        >
+                            <div className="theme-option-icon">
+                                <Icon name="sun" size={20} />
+                            </div>
+                            <span className="theme-option-label">Light</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Password Change */}
