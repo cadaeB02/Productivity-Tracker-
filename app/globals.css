@@ -1628,6 +1628,98 @@ textarea.input {
   color: var(--text-accent);
 }
 
+/* Agent Login */
+.agent-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.agent-login-divider .divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.btn-agent-login {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-agent-login:hover {
+  border-color: var(--color-accent);
+  color: var(--text-accent);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.agent-login-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-accent);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+}
+
+/* Agent Token Display (Settings) */
+.agent-token-display {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.agent-token-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fbbf24;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.agent-token-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-token-value code {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  word-break: break-all;
+  user-select: all;
+}
+
 /* ==================== LOADING ==================== */
 
 .loading-spinner {
