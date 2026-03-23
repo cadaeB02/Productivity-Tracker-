@@ -30,6 +30,7 @@ export default function TimerPage() {
     const [showPendingSummaries, setShowPendingSummaries] = useState(false);
     const [loading, setLoading] = useState(true);
     const [editingStartTime, setEditingStartTime] = useState(null); // session id being edited
+    const [expanded, setExpanded] = useState({}); // tile expand state
     const timerRef = useRef(null);
 
     const loadData = useCallback(async () => {
@@ -232,6 +233,10 @@ export default function TimerPage() {
     const activeTaskIds = new Set(activeSessions.map((s) => s.task_id));
     const contextSwitchCount = activeSessions.length;
 
+    const toggleExpand = (id) => {
+        setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+    };
+
     if (loading) {
         return (
             <AppLayout>
@@ -377,9 +382,9 @@ export default function TimerPage() {
                 </div>
             )}
 
-            {/* Task Switcher */}
+            {/* Task Switcher — Tile Grid */}
             <div className="task-switcher">
-                <h3>Quick Switch</h3>
+                <h3><Icon name="grid" size={16} className="icon-inline" /> Quick Switch</h3>
 
                 {groupedTasks.length === 0 ? (
                     <div className="empty-state" style={{ padding: '30px 20px' }}>
@@ -388,48 +393,84 @@ export default function TimerPage() {
                         <p>Go to <a href="/projects">Projects</a> to create companies, projects, and tasks.</p>
                     </div>
                 ) : (
-                    groupedTasks.map((company) => (
-                        <div key={company.id} className="task-group">
-                            <div className="task-group-header">
-                                <span className="color-dot" style={{ backgroundColor: company.color }} />
-                                {company.name}
-                            </div>
-                            {company.projects.map((project) => (
-                                <div key={project.id}>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 0 2px 20px', fontWeight: 500 }}>
-                                        {project.name}
-                                    </div>
-                                    {project.tasks.map((task) => {
-                                        const isActive = activeTaskIds.has(task.id);
-                                        const activeSession = activeSessions.find((s) => s.task_id === task.id);
-                                        const elapsed = activeSession ? elapsedMap[activeSession.id] || 0 : 0;
+                    <div className="company-tile-grid">
+                        {groupedTasks.map((company) => {
+                            const totalTasks = company.projects.reduce((sum, p) => sum + p.tasks.length, 0);
+                            const activeCount = company.projects.reduce((sum, p) =>
+                                sum + p.tasks.filter(t => activeTaskIds.has(t.id)).length, 0);
+                            const isExpanded = expanded[company.id];
 
-                                        return (
-                                            <div
-                                                key={task.id}
-                                                className={`task-item ${isActive ? 'active' : ''}`}
-                                                onClick={() => handleStartTask(task)}
-                                            >
-                                                <span>{task.name}</span>
-                                                {isActive ? (
-                                                    <span className="task-item-elapsed">
-                                                        {formatDuration(elapsed)}
-                                                    </span>
-                                                ) : (
-                                                    <span className="play-icon"><Icon name="play" size={12} /></span>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    {project.tasks.length === 0 && (
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '4px 12px 4px 32px', fontStyle: 'italic' }}>
-                                            No tasks — add some in Projects
+                            return (
+                                <div
+                                    key={company.id}
+                                    className={`company-tile ${isExpanded ? 'expanded' : ''}`}
+                                    style={{ cursor: 'default' }}
+                                >
+                                    {/* Color accent bar */}
+                                    <div className="tile-accent" style={{ backgroundColor: company.color }} />
+
+                                    {/* Tile header */}
+                                    <div className="tile-header" onClick={() => toggleExpand(company.id)}>
+                                        <div className="tile-title-row">
+                                            <span className="color-dot" style={{ backgroundColor: company.color, width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
+                                            <span className="tile-name">{company.name}</span>
+                                            {company.company_type === 'physical' && <span className="badge badge-physical">Physical</span>}
+                                            {activeCount > 0 && (
+                                                <span className="badge badge-active" style={{ marginLeft: '4px' }}>
+                                                    <Icon name="record" size={8} /> {activeCount} active
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="tile-meta">
+                                            <span>{company.projects.length} project{company.projects.length !== 1 ? 's' : ''}</span>
+                                            <span>•</span>
+                                            <span>{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded body — projects & tasks */}
+                                    {isExpanded && (
+                                        <div className="tile-body">
+                                            {company.projects.map((project) => (
+                                                <div key={project.id} style={{ marginBottom: '8px' }}>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 0 4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                        {project.name}
+                                                    </div>
+                                                    {project.tasks.map((task) => {
+                                                        const isActive = activeTaskIds.has(task.id);
+                                                        const activeSession = activeSessions.find((s) => s.task_id === task.id);
+                                                        const elapsed = activeSession ? elapsedMap[activeSession.id] || 0 : 0;
+
+                                                        return (
+                                                            <div
+                                                                key={task.id}
+                                                                className={`task-item ${isActive ? 'active' : ''}`}
+                                                                onClick={() => handleStartTask(task)}
+                                                            >
+                                                                <span>{task.name}</span>
+                                                                {isActive ? (
+                                                                    <span className="task-item-elapsed">
+                                                                        {formatDuration(elapsed)}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="play-icon"><Icon name="play" size={12} /></span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {project.tasks.length === 0 && (
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '4px 0 4px 12px', fontStyle: 'italic' }}>
+                                                            No tasks — add some in Projects
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
-                            ))}
-                        </div>
-                    ))
+                            );
+                        })}
+                    </div>
                 )}
             </div>
 
