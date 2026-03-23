@@ -2639,7 +2639,7 @@ textarea.input {
 .day-timeline {
   position: relative;
   width: max(100%, 1200px);
-  height: 80px;
+  height: 100px;
   background: var(--bg-input);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
@@ -2708,11 +2708,11 @@ textarea.input {
 .timeline-block {
   position: absolute;
   top: 18px;
-  height: 48px;
+  height: 58px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 10px;
   overflow: hidden;
   transition: filter var(--transition-fast);
   z-index: 2;
@@ -2750,8 +2750,8 @@ textarea.input {
 }
 
 .timeline-block-label {
-  font-size: 0.6rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -2760,7 +2760,8 @@ textarea.input {
 
 .timeline-block.actual .timeline-block-label {
   color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  font-size: 0.75rem;
 }
 
 /* ==================== SCHEDULE: DURATION CHIPS ==================== */
