@@ -403,7 +403,7 @@ export default function TimerPage() {
                             return (
                                 <div
                                     key={company.id}
-                                    className={`company-tile ${isExpanded ? 'expanded' : ''}`}
+                                    className="company-tile"
                                     style={{ cursor: 'default' }}
                                 >
                                     {/* Color accent bar */}
