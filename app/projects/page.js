@@ -16,8 +16,13 @@ import {
     deleteCompany,
     deleteProject,
     deleteTask,
+    getAutoClockRules,
+    addAutoClockRule,
+    deleteAutoClockRule,
 } from '@/lib/store';
 import { COMPANY_COLORS } from '@/lib/utils';
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function ProjectsPage() {
     const [companies, setCompanies] = useState([]);
@@ -25,6 +30,7 @@ export default function ProjectsPage() {
     const [tasksByProject, setTasksByProject] = useState({});
     const [expanded, setExpanded] = useState({});
     const [loading, setLoading] = useState(true);
+    const [autoClockRules, setAutoClockRules] = useState([]);
 
     // New company states
     const [newCompanyName, setNewCompanyName] = useState('');
@@ -54,10 +60,28 @@ export default function ProjectsPage() {
     const [editingPayConfig, setEditingPayConfig] = useState(null);
     const [editPayFields, setEditPayFields] = useState({});
 
+    // Auto-clock setup
+    const [showAutoClockSetup, setShowAutoClockSetup] = useState(null);
+    const [autoClockDay, setAutoClockDay] = useState(1);
+    const [autoClockTime, setAutoClockTime] = useState('09:25');
+    const [autoClockProjectId, setAutoClockProjectId] = useState('');
+    const [autoClockTaskId, setAutoClockTaskId] = useState('');
+
+    // Drag state
+    const [draggedCompany, setDraggedCompany] = useState(null);
+    const [dragOverCompany, setDragOverCompany] = useState(null);
+
     const loadData = useCallback(async () => {
         try {
-            const c = await getCompanies();
+            const [c, rules] = await Promise.all([
+                getCompanies(),
+                getAutoClockRules(),
+            ]);
+
+            // Sort by display_order then by name
+            c.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
             setCompanies(c);
+            setAutoClockRules(rules);
 
             const pMap = {};
             const tMap = {};
@@ -191,6 +215,60 @@ export default function ProjectsPage() {
         loadData();
     };
 
+    // Auto-clock handlers
+    const handleAddAutoClockRule = async (companyId) => {
+        if (!autoClockProjectId || !autoClockTaskId) return;
+        try {
+            await addAutoClockRule(companyId, autoClockProjectId, autoClockTaskId, autoClockDay, autoClockTime);
+            setShowAutoClockSetup(null);
+            loadData();
+        } catch (err) {
+            console.error('Failed to add auto-clock rule:', err);
+        }
+    };
+
+    const handleDeleteAutoClockRule = async (ruleId) => {
+        await deleteAutoClockRule(ruleId);
+        loadData();
+    };
+
+    // Drag and drop handlers
+    const handleDragStart = (e, companyId) => {
+        setDraggedCompany(companyId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e, companyId) => {
+        e.preventDefault();
+        if (companyId !== draggedCompany) {
+            setDragOverCompany(companyId);
+        }
+    };
+
+    const handleDrop = async (e, targetCompanyId) => {
+        e.preventDefault();
+        if (!draggedCompany || draggedCompany === targetCompanyId) {
+            setDraggedCompany(null);
+            setDragOverCompany(null);
+            return;
+        }
+
+        const newOrder = [...companies];
+        const dragIdx = newOrder.findIndex(c => c.id === draggedCompany);
+        const dropIdx = newOrder.findIndex(c => c.id === targetCompanyId);
+        const [moved] = newOrder.splice(dragIdx, 1);
+        newOrder.splice(dropIdx, 0, moved);
+
+        // Update display_order for all
+        setCompanies(newOrder);
+        for (let i = 0; i < newOrder.length; i++) {
+            await updateCompany(newOrder[i].id, { display_order: i });
+        }
+
+        setDraggedCompany(null);
+        setDragOverCompany(null);
+    };
+
     // Reusable pay/tax config form
     const renderPayConfig = (type, payRate, payType, payPeriod, payPeriodStart, taxFed, taxState, taxFica, taxDeductions, setField) => (
         <>
@@ -265,7 +343,7 @@ export default function ProjectsPage() {
         <AppLayout>
             <div className="page-header flex justify-between items-center">
                 <div>
-                    <h2>Projects</h2>
+                    <h2><Icon name="grid" size={22} className="icon-inline" /> Projects</h2>
                     <p>Organize your work by company, project, and task</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setShowNewCompany(true)}>
@@ -337,7 +415,7 @@ export default function ProjectsPage() {
                 </div>
             )}
 
-            {/* Companies List — Accordion */}
+            {/* Companies Tile Grid */}
             {companies.length === 0 && !showNewCompany ? (
                 <div className="empty-state">
                     <div className="empty-state-icon"><Icon name="building" size={48} /></div>
@@ -346,30 +424,37 @@ export default function ProjectsPage() {
                     <button className="btn btn-primary" onClick={() => setShowNewCompany(true)}>+ Create Company</button>
                 </div>
             ) : (
-                <div className="companies-grid">
+                <div className="company-tile-grid">
                     {companies.map((company) => {
                         const companyProjects = projectsByCompany[company.id] || [];
                         const isOpen = expanded[company.id] === true;
                         const isPhysical = company.company_type === 'physical';
                         const totalTasks = companyProjects.reduce((sum, p) => sum + (tasksByProject[p.id]?.length || 0), 0);
+                        const companyRules = autoClockRules.filter(r => r.company_id === company.id);
+                        const isDragOver = dragOverCompany === company.id;
 
                         return (
-                            <div key={company.id} className="company-card">
-                                {/* Collapsed Header — always visible */}
-                                <div
-                                    className="company-card-header"
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => toggleExpanded(company.id)}
-                                >
-                                    <h3 style={{ flex: 1 }}>
-                                        <Icon name={isOpen ? 'chevron-down' : 'chevron-down'} size={14}
-                                            style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s ease' }}
-                                        />
-                                        <span className="color-dot" style={{ backgroundColor: company.color, width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block' }} />
+                            <div
+                                key={company.id}
+                                className={`company-tile ${isOpen ? 'expanded' : ''} ${isDragOver ? 'drag-over' : ''}`}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, company.id)}
+                                onDragOver={(e) => handleDragOver(e, company.id)}
+                                onDragLeave={() => setDragOverCompany(null)}
+                                onDrop={(e) => handleDrop(e, company.id)}
+                                onDragEnd={() => { setDraggedCompany(null); setDragOverCompany(null); }}
+                            >
+                                {/* Color accent bar */}
+                                <div className="tile-accent" style={{ backgroundColor: company.color }} />
+
+                                {/* Tile header */}
+                                <div className="tile-header" onClick={() => toggleExpanded(company.id)}>
+                                    <div className="tile-title-row">
+                                        <span className="color-dot" style={{ backgroundColor: company.color, width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
                                         {editingCompany === company.id ? (
                                             <input
                                                 className="input"
-                                                style={{ padding: '4px 8px', fontSize: '0.9rem', width: '180px' }}
+                                                style={{ padding: '4px 8px', fontSize: '0.9rem', width: '160px' }}
                                                 value={editCompanyName}
                                                 onChange={(e) => setEditCompanyName(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleEditCompany(company.id)}
@@ -378,37 +463,107 @@ export default function ProjectsPage() {
                                                 onClick={(e) => e.stopPropagation()}
                                             />
                                         ) : (
-                                            <span>{company.name}</span>
+                                            <span className="tile-name">{company.name}</span>
                                         )}
                                         {isPhysical && <span className="badge badge-physical">Physical</span>}
-                                    </h3>
-
-                                    <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '4px' }}>
-                                            {companyProjects.length} projects • {totalTasks} tasks
-                                        </span>
+                                    </div>
+                                    <div className="tile-meta">
+                                        <span>{companyProjects.length} project{companyProjects.length !== 1 ? 's' : ''}</span>
+                                        <span>•</span>
+                                        <span>{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span>
                                         {isPhysical && company.pay_rate && (
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
-                                                ${parseFloat(company.pay_rate).toFixed(2)}/hr
-                                            </span>
+                                            <>
+                                                <span>•</span>
+                                                <span className="tile-pay">${parseFloat(company.pay_rate).toFixed(2)}/hr</span>
+                                            </>
                                         )}
-                                        {isPhysical && (
-                                            <button className="btn-icon" title="Pay & Tax Config" onClick={() => editingPayConfig === company.id ? setEditingPayConfig(null) : handleOpenPayConfig(company)}>
-                                                <Icon name="dollar" size={14} />
-                                            </button>
+                                        {companyRules.length > 0 && (
+                                            <>
+                                                <span>•</span>
+                                                <span style={{ color: '#facc15', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                    <Icon name="zap" size={10} /> Auto
+                                                </span>
+                                            </>
                                         )}
-                                        <button className="btn-icon" title="Edit name" onClick={() => { setEditingCompany(company.id); setEditCompanyName(company.name); }}>
-                                            <Icon name="edit" size={14} />
-                                        </button>
-                                        <button className="btn-icon" title="Delete" onClick={() => handleDeleteCompany(company.id)}>
-                                            <Icon name="trash" size={14} />
-                                        </button>
                                     </div>
                                 </div>
 
+                                {/* Action buttons */}
+                                <div className="tile-actions" onClick={(e) => e.stopPropagation()}>
+                                    {isPhysical && (
+                                        <button className="btn-icon" title="Auto-Clock Rules" onClick={() => setShowAutoClockSetup(showAutoClockSetup === company.id ? null : company.id)}>
+                                            <Icon name="zap" size={14} />
+                                        </button>
+                                    )}
+                                    {isPhysical && (
+                                        <button className="btn-icon" title="Pay & Tax Config" onClick={() => editingPayConfig === company.id ? setEditingPayConfig(null) : handleOpenPayConfig(company)}>
+                                            <Icon name="dollar" size={14} />
+                                        </button>
+                                    )}
+                                    <button className="btn-icon" title="Edit name" onClick={() => { setEditingCompany(company.id); setEditCompanyName(company.name); }}>
+                                        <Icon name="edit" size={14} />
+                                    </button>
+                                    <button className="btn-icon" title="Delete" onClick={() => handleDeleteCompany(company.id)}>
+                                        <Icon name="trash" size={14} />
+                                    </button>
+                                </div>
+
+                                {/* Auto-clock setup */}
+                                {showAutoClockSetup === company.id && (
+                                    <div className="tile-section" onClick={(e) => e.stopPropagation()}>
+                                        <h4 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px', color: '#facc15' }}>
+                                            <Icon name="zap" size={14} /> Auto-Clock Rules
+                                        </h4>
+                                        {/* Existing rules */}
+                                        {companyRules.map(rule => (
+                                            <div key={rule.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '0.8rem', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
+                                                <Icon name="zap" size={12} style={{ color: '#facc15' }} />
+                                                <span style={{ fontWeight: 600 }}>{DAY_NAMES[rule.day_of_week]}</span>
+                                                <span>at {rule.start_time}</span>
+                                                <span style={{ color: 'var(--text-muted)' }}>→ {rule.tasks?.name || 'Task'}</span>
+                                                <button className="btn-icon" onClick={() => handleDeleteAutoClockRule(rule.id)} style={{ marginLeft: 'auto' }}>
+                                                    <Icon name="close" size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {/* Add new rule */}
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                            <div className="input-group" style={{ minWidth: '80px' }}>
+                                                <label style={{ fontSize: '0.7rem' }}>Day</label>
+                                                <select className="input" style={{ fontSize: '0.8rem' }} value={autoClockDay} onChange={e => setAutoClockDay(parseInt(e.target.value))}>
+                                                    {DAY_NAMES.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="input-group" style={{ minWidth: '100px' }}>
+                                                <label style={{ fontSize: '0.7rem' }}>Time</label>
+                                                <input className="input" type="time" style={{ fontSize: '0.8rem' }} value={autoClockTime} onChange={e => setAutoClockTime(e.target.value)} />
+                                            </div>
+                                            <div className="input-group" style={{ minWidth: '120px' }}>
+                                                <label style={{ fontSize: '0.7rem' }}>Project</label>
+                                                <select className="input" style={{ fontSize: '0.8rem' }} value={autoClockProjectId} onChange={e => { setAutoClockProjectId(e.target.value); setAutoClockTaskId(''); }}>
+                                                    <option value="">Pick project...</option>
+                                                    {companyProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                                </select>
+                                            </div>
+                                            {autoClockProjectId && (
+                                                <div className="input-group" style={{ minWidth: '120px' }}>
+                                                    <label style={{ fontSize: '0.7rem' }}>Task</label>
+                                                    <select className="input" style={{ fontSize: '0.8rem' }} value={autoClockTaskId} onChange={e => setAutoClockTaskId(e.target.value)}>
+                                                        <option value="">Pick task...</option>
+                                                        {(tasksByProject[autoClockProjectId] || []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            <button className="btn btn-primary btn-sm" onClick={() => handleAddAutoClockRule(company.id)} disabled={!autoClockTaskId}>
+                                                <Icon name="plus" size={12} /> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Pay/Tax Config Panel */}
                                 {editingPayConfig === company.id && (
-                                    <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+                                    <div className="tile-section" onClick={(e) => e.stopPropagation()}>
                                         <div className="input-group" style={{ marginBottom: '12px' }}>
                                             <label>Company Type</label>
                                             <div className="toggle-group">
@@ -435,7 +590,7 @@ export default function ProjectsPage() {
 
                                 {/* Expanded Body — projects & tasks */}
                                 {isOpen && (
-                                    <div className="company-card-body">
+                                    <div className="tile-body" onClick={(e) => e.stopPropagation()}>
                                         {companyProjects.map((project) => {
                                             const projectTasks = tasksByProject[project.id] || [];
                                             const projectExpanded = expanded[`p-${project.id}`] !== false;

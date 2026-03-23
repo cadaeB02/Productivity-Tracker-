@@ -10,6 +10,7 @@ import Icon from '@/components/Icon';
 const NAV_ITEMS = [
     { href: '/', label: 'Timer', icon: 'timer' },
     { href: '/projects', label: 'Projects', icon: 'folder' },
+    { href: '/schedule', label: 'Schedule', icon: 'calendar' },
     { href: '/history', label: 'History', icon: 'clipboard' },
     { href: '/stats', label: 'Stats', icon: 'chart' },
     { href: '/agent', label: 'AI Agent', icon: 'robot' },
@@ -55,7 +56,7 @@ export default function Sidebar() {
             <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
                     <h1>Parallax</h1>
-                    <span>Productivity Tracker • V4.0</span>
+                    <span>Productivity Tracker • V5.0</span>
                 </div>
 
                 <nav className="sidebar-nav">
