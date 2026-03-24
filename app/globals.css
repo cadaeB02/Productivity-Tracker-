@@ -1091,6 +1091,11 @@ select {
   box-shadow: var(--shadow-sm);
 }
 
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
 .notes-list {
   display: flex;
   flex-direction: column;

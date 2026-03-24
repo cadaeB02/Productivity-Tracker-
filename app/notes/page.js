@@ -44,6 +44,7 @@ export default function NotesPage() {
     const [vaultError, setVaultError] = useState('');
     const [decryptedNotes, setDecryptedNotes] = useState({});
     const [showingPasswords, setShowingPasswords] = useState({});
+    const [noteCounts, setNoteCounts] = useState({});
 
     const loadNotes = useCallback(async () => {
         try {
@@ -62,10 +63,26 @@ export default function NotesPage() {
         setLoading(false);
     }, [activeTab, activeCompanyId, searchQuery]);
 
+    const loadCounts = useCallback(async () => {
+        try {
+            const counts = {};
+            for (const cat of CATEGORIES) {
+                const filters = { category: cat.key };
+                if (activeCompanyId) filters.companyId = activeCompanyId;
+                const data = await getNotes(filters);
+                counts[cat.key] = data.length;
+            }
+            setNoteCounts(counts);
+        } catch (err) {
+            console.error('Failed to load counts', err);
+        }
+    }, [activeCompanyId]);
+
     useEffect(() => {
         setLoading(true);
         loadNotes();
-    }, [loadNotes]);
+        loadCounts();
+    }, [loadNotes, loadCounts]);
 
     const resetForm = () => {
         setForm({ title: '', content: '' });
@@ -104,6 +121,7 @@ export default function NotesPage() {
             }
             resetForm();
             loadNotes();
+            loadCounts();
         } catch (err) {
             console.error('Failed to save note', err);
         }
@@ -124,6 +142,7 @@ export default function NotesPage() {
         try {
             await deleteNote(id);
             loadNotes();
+            loadCounts();
         } catch (err) {
             console.error('Failed to delete note', err);
         }
@@ -179,6 +198,7 @@ export default function NotesPage() {
         try {
             await updateNote(note.id, { category: newCategory });
             loadNotes();
+            loadCounts();
         } catch (err) {
             console.error('Failed to move note', err);
         }
@@ -235,6 +255,19 @@ export default function NotesPage() {
                     >
                         <Icon name={cat.icon} size={14} />
                         <span>{cat.label}</span>
+                        {(noteCounts[cat.key] || 0) > 0 && (
+                            <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                minWidth: '18px', height: '18px', borderRadius: '9px',
+                                fontSize: '0.65rem', fontWeight: 700, padding: '0 5px',
+                                background: cat.key === 'inbox' ? 'var(--color-accent)' : 'var(--bg-elevated)',
+                                color: cat.key === 'inbox' ? '#fff' : 'var(--text-muted)',
+                                marginLeft: '4px',
+                                animation: cat.key === 'inbox' ? 'pulse-badge 2s ease-in-out infinite' : 'none',
+                            }}>
+                                {noteCounts[cat.key]}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
