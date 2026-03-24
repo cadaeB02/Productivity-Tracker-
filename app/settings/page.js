@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { createClient } from '@/lib/supabase/client';
-import { getUserSettings, saveUserSettings, getSessions, exportSessionsToCSV, downloadCSV } from '@/lib/store';
+import { getUserSettings, saveUserSettings, getSessions, exportSessionsToCSV, downloadCSV, getCompanies } from '@/lib/store';
 import { useTheme } from '@/components/ThemeProvider';
 import { hasApiKey as hasLocalApiKey, setApiKey as setLocalApiKey, clearApiKey as clearLocalApiKey } from '@/lib/gemini';
 
@@ -46,11 +46,29 @@ export default function SettingsPage() {
     const [passwordStatus, setPasswordStatus] = useState(null);
     const [changingPassword, setChangingPassword] = useState(false);
 
+    // Merge Companies
+    const [mergeCompanies, setMergeCompanies] = useState([]);
+    const [mergeParent, setMergeParent] = useState('');
+    const [mergeChildren, setMergeChildren] = useState([]);
+    const [merging, setMerging] = useState(false);
+    const [mergeResult, setMergeResult] = useState(null);
+
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadSettings();
+        loadCompaniesForMerge();
     }, []);
+
+    const loadCompaniesForMerge = async () => {
+        try {
+            const comps = await getCompanies();
+            comps.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            setMergeCompanies(comps);
+        } catch (err) {
+            console.error('Failed to load companies for merge', err);
+        }
+    };
 
     const loadSettings = async () => {
         try {
@@ -538,6 +556,101 @@ export default function SettingsPage() {
                             <Icon name="package" size={14} /> Export JSON Backup
                         </button>
                     </div>
+                </div>
+            </div>
+
+            {/* Merge Companies */}
+            <div className="settings-section">
+                <h3><Icon name="folder" size={18} className="icon-inline" /> Merge Companies</h3>
+                <div className="card">
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                        Consolidate multiple companies into one. All projects, tasks, sessions, transactions, and notes will be moved to the parent company.
+                    </p>
+
+                    <div className="input-group" style={{ marginBottom: '12px' }}>
+                        <label>Parent Company (keep this one)</label>
+                        <select
+                            className="input"
+                            value={mergeParent}
+                            onChange={(e) => {
+                                setMergeParent(e.target.value);
+                                setMergeChildren([]);
+                                setMergeResult(null);
+                            }}
+                        >
+                            <option value="">Select parent company...</option>
+                            {mergeCompanies.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {mergeParent && (
+                        <div className="input-group" style={{ marginBottom: '16px' }}>
+                            <label>Companies to merge into parent (will be deleted after merge)</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                                {mergeCompanies.filter(c => c.id !== mergeParent).map(c => (
+                                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={mergeChildren.includes(c.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setMergeChildren(prev => [...prev, c.id]);
+                                                } else {
+                                                    setMergeChildren(prev => prev.filter(id => id !== c.id));
+                                                }
+                                                setMergeResult(null);
+                                            }}
+                                        />
+                                        <span className="color-dot" style={{ backgroundColor: c.color, width: '8px', height: '8px', borderRadius: '50%' }} />
+                                        {c.name}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {mergeParent && mergeChildren.length > 0 && (
+                        <div style={{ marginBottom: '12px', padding: '10px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem' }}>
+                            <strong>Preview:</strong> {mergeChildren.length} compan{mergeChildren.length === 1 ? 'y' : 'ies'} will be merged into <strong>{mergeCompanies.find(c => c.id === mergeParent)?.name}</strong>. Their projects, tasks, sessions, transactions, and notes will be moved. The merged companies will be deleted.
+                        </div>
+                    )}
+
+                    {mergeResult && (
+                        <div style={{ marginBottom: '12px', padding: '10px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', color: 'var(--color-success)' }}>
+                            Merged {mergeResult.merged} companies. Moved: {mergeResult.moved.projects} projects, {mergeResult.moved.tasks} tasks, {mergeResult.moved.sessions} sessions, {mergeResult.moved.transactions} transactions, {mergeResult.moved.notes} notes.
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-primary"
+                        disabled={!mergeParent || mergeChildren.length === 0 || merging}
+                        onClick={async () => {
+                            if (!confirm(`Merge ${mergeChildren.length} companies into ${mergeCompanies.find(c => c.id === mergeParent)?.name}? This cannot be undone.`)) return;
+                            setMerging(true);
+                            try {
+                                const res = await fetch('/api/merge-companies', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ parentId: mergeParent, childIds: mergeChildren }),
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    setMergeResult(data);
+                                    setMergeChildren([]);
+                                    loadCompaniesForMerge();
+                                } else {
+                                    alert('Merge failed: ' + (data.error || 'Unknown error'));
+                                }
+                            } catch (err) {
+                                alert('Merge failed: ' + err.message);
+                            }
+                            setMerging(false);
+                        }}
+                    >
+                        <Icon name="folder" size={14} /> {merging ? 'Merging...' : 'Merge Companies'}
+                    </button>
                 </div>
             </div>
 
