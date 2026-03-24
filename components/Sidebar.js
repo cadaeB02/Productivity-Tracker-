@@ -13,6 +13,7 @@ const NAV_ITEMS = [
     { href: '/projects', label: 'Projects', icon: 'folder' },
     { href: '/schedule', label: 'Schedule', icon: 'calendar' },
     { href: '/compliance', label: 'Compliance', icon: 'shield' },
+    { href: '/treasury', label: 'Treasury', icon: 'dollar' },
     { href: '/history', label: 'History', icon: 'clipboard' },
     { href: '/stats', label: 'Stats', icon: 'chart' },
     { href: '/agent', label: 'AI Agent', icon: 'robot' },

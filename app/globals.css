@@ -824,6 +824,124 @@ select {
   color: var(--color-danger);
 }
 
+/* ==================== TREASURY PAGE ==================== */
+
+.treasury-type-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.treasury-type-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+
+.treasury-type-btn.active.revenue {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success);
+}
+
+.treasury-type-btn.active.expense {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}
+
+.treasury-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.treasury-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.treasury-row:last-child {
+  border-bottom: none;
+}
+
+.treasury-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.treasury-type-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.treasury-type-dot.revenue {
+  background-color: var(--color-success);
+}
+
+.treasury-type-dot.expense {
+  background-color: var(--color-danger);
+}
+
+.treasury-row-desc {
+  font-size: 0.88rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treasury-row-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.treasury-category {
+  background: var(--bg-elevated);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+}
+
+.treasury-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.treasury-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.treasury-amount.revenue {
+  color: var(--color-success);
+}
+
+.treasury-amount.expense {
+  color: var(--color-danger);
+}
+
 /* ==================== PAGE HEADER ==================== */
 
 .page-header {
