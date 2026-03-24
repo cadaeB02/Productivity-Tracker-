@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getCompanies, updateEntityCompliance, updateCompany, getEquityHolders, addEquityHolder, updateEquityHolder, deleteEquityHolder } from '@/lib/store';
+import { getCompanies, updateEntityCompliance, updateCompany, getEquityHolders, addEquityHolder, updateEquityHolder, deleteEquityHolder, transferEquity, getEquityTransfers, uploadDocument } from '@/lib/store';
 
 const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -40,6 +40,13 @@ export default function CompliancePage() {
     const [showEquityForm, setShowEquityForm] = useState(false);
     const [editingEquityId, setEditingEquityId] = useState(null);
     const [equityForm, setEquityForm] = useState({ holder_name: '', percentage: '', role: '', notes: '' });
+
+    // Transfer
+    const [showTransfer, setShowTransfer] = useState(false);
+    const [transferForm, setTransferForm] = useState({ from_id: '', to_type: 'new', to_id: '', to_name: '', to_role: '', percentage: '', notes: '' });
+    const [transferring, setTransferring] = useState(false);
+    const [transfers, setTransfers] = useState([]);
+    const transferFileRef = useRef(null);
 
     const loadData = useCallback(async () => {
         try {
@@ -79,12 +86,23 @@ export default function CompliancePage() {
         }
     }, [activeCompanyId]);
 
+    const loadTransfers = useCallback(async () => {
+        if (!activeCompanyId) return;
+        try {
+            const t = await getEquityTransfers(activeCompanyId);
+            setTransfers(t);
+        } catch (err) {
+            console.error('Failed to load transfers', err);
+        }
+    }, [activeCompanyId]);
+
     useEffect(() => {
         setLoading(true);
         setShowEin(false);
         loadData();
         loadEquity();
-    }, [loadData, loadEquity]);
+        loadTransfers();
+    }, [loadData, loadEquity, loadTransfers]);
 
     const resetEquityForm = () => {
         setEquityForm({ holder_name: '', percentage: '', role: '', notes: '' });
@@ -128,6 +146,50 @@ export default function CompliancePage() {
         });
         setEditingEquityId(holder.id);
         setShowEquityForm(true);
+    };
+
+    const handleTransfer = async (e) => {
+        e.preventDefault();
+        if (!transferForm.from_id || !transferForm.percentage) return;
+        setTransferring(true);
+        try {
+            // Upload agreement file if attached
+            let agreementDocId = null;
+            const file = transferFileRef.current?.files?.[0];
+            if (file && activeCompanyId) {
+                const doc = await uploadDocument({
+                    file,
+                    company_id: activeCompanyId,
+                    category: 'agreement',
+                    description: `Equity transfer: ${transferForm.percentage}% to ${transferForm.to_type === 'new' ? transferForm.to_name : 'existing holder'}`,
+                });
+                agreementDocId = doc.id;
+            }
+
+            const toName = transferForm.to_type === 'new'
+                ? transferForm.to_name
+                : equityHolders.find(h => h.id === transferForm.to_id)?.holder_name || '';
+
+            await transferEquity({
+                company_id: activeCompanyId,
+                from_holder_id: transferForm.from_id,
+                to_holder_id: transferForm.to_type === 'existing' ? transferForm.to_id : null,
+                to_name: toName,
+                to_role: transferForm.to_role,
+                percentage: transferForm.percentage,
+                notes: transferForm.notes,
+                agreement_doc_id: agreementDocId,
+            });
+
+            setShowTransfer(false);
+            setTransferForm({ from_id: '', to_type: 'new', to_id: '', to_name: '', to_role: '', percentage: '', notes: '' });
+            if (transferFileRef.current) transferFileRef.current.value = '';
+            loadEquity();
+            loadTransfers();
+        } catch (err) {
+            alert('Transfer failed: ' + err.message);
+        }
+        setTransferring(false);
     };
 
     const handleEquityDelete = async (id) => {
@@ -464,6 +526,146 @@ export default function CompliancePage() {
                                 <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                                     No equity holders added yet. Click "Add Holder" to track ownership.
                                 </div>
+                            )}
+                        </div>
+
+                        {/* Transfer Equity */}
+                        <div className="card" style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                    <Icon name="zap" size={16} /> Transfer Equity
+                                </h3>
+                                <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => setShowTransfer(!showTransfer)}
+                                    disabled={equityHolders.length === 0}
+                                >
+                                    <Icon name="zap" size={12} /> {showTransfer ? 'Cancel' : 'New Transfer'}
+                                </button>
+                            </div>
+
+                            {showTransfer && (
+                                <form onSubmit={handleTransfer} style={{ padding: '14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '10px', marginBottom: '10px' }}>
+                                        <div className="input-group">
+                                            <label>Transfer From</label>
+                                            <select
+                                                className="input"
+                                                value={transferForm.from_id}
+                                                onChange={(e) => setTransferForm(f => ({ ...f, from_id: e.target.value }))}
+                                                required
+                                            >
+                                                <option value="">Select holder...</option>
+                                                {equityHolders.map(h => (
+                                                    <option key={h.id} value={h.id}>{h.holder_name} ({h.percentage}%)</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="input-group">
+                                            <label>%</label>
+                                            <input
+                                                className="input"
+                                                type="number"
+                                                step="0.01"
+                                                min="0.01"
+                                                max={transferForm.from_id ? equityHolders.find(h => h.id === transferForm.from_id)?.percentage : 100}
+                                                placeholder="2"
+                                                value={transferForm.percentage}
+                                                onChange={(e) => setTransferForm(f => ({ ...f, percentage: e.target.value }))}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                                        <button type="button" className={`btn btn-sm ${transferForm.to_type === 'new' ? 'btn-primary' : 'btn-secondary'}`}
+                                            onClick={() => setTransferForm(f => ({ ...f, to_type: 'new', to_id: '' }))}
+                                        >New Investor</button>
+                                        <button type="button" className={`btn btn-sm ${transferForm.to_type === 'existing' ? 'btn-primary' : 'btn-secondary'}`}
+                                            onClick={() => setTransferForm(f => ({ ...f, to_type: 'existing', to_name: '' }))}
+                                        >Existing Holder</button>
+                                    </div>
+
+                                    {transferForm.to_type === 'new' ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                            <div className="input-group">
+                                                <label>Investor Name</label>
+                                                <input className="input" placeholder="e.g. Kellen" value={transferForm.to_name}
+                                                    onChange={(e) => setTransferForm(f => ({ ...f, to_name: e.target.value }))} required />
+                                            </div>
+                                            <div className="input-group">
+                                                <label>Role</label>
+                                                <input className="input" placeholder="e.g. Investor" value={transferForm.to_role}
+                                                    onChange={(e) => setTransferForm(f => ({ ...f, to_role: e.target.value }))} />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="input-group" style={{ marginBottom: '10px' }}>
+                                            <label>Transfer To</label>
+                                            <select className="input" value={transferForm.to_id}
+                                                onChange={(e) => setTransferForm(f => ({ ...f, to_id: e.target.value }))} required>
+                                                <option value="">Select holder...</option>
+                                                {equityHolders.filter(h => h.id !== transferForm.from_id).map(h => (
+                                                    <option key={h.id} value={h.id}>{h.holder_name} ({h.percentage}%)</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                        <div className="input-group">
+                                            <label>Attach Agreement (optional)</label>
+                                            <input ref={transferFileRef} className="input" type="file" style={{ padding: '6px' }} />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>Notes</label>
+                                            <input className="input" placeholder="Transfer details..." value={transferForm.notes}
+                                                onChange={(e) => setTransferForm(f => ({ ...f, notes: e.target.value }))} />
+                                        </div>
+                                    </div>
+
+                                    {transferForm.from_id && transferForm.percentage && (
+                                        <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem' }}>
+                                            <strong>Preview:</strong> {equityHolders.find(h => h.id === transferForm.from_id)?.holder_name} ({equityHolders.find(h => h.id === transferForm.from_id)?.percentage}%{' '}
+                                            → {(parseFloat(equityHolders.find(h => h.id === transferForm.from_id)?.percentage || 0) - parseFloat(transferForm.percentage || 0)).toFixed(2)}%){' '}
+                                            → {transferForm.to_type === 'new' ? transferForm.to_name || '...' : equityHolders.find(h => h.id === transferForm.to_id)?.holder_name || '...'} gets {transferForm.percentage}%
+                                        </div>
+                                    )}
+
+                                    <button className="btn btn-primary" type="submit" disabled={transferring}>
+                                        <Icon name="zap" size={14} /> {transferring ? 'Transferring...' : 'Execute Transfer'}
+                                    </button>
+                                </form>
+                            )}
+
+                            {/* Transfer History */}
+                            {transfers.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>Transfer History</div>
+                                    {transfers.map(t => (
+                                        <div key={t.id} className="equity-holder-row" style={{ fontSize: '0.82rem' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <div>
+                                                    <strong>{t.from_name}</strong> ({t.from_old_pct}% → {t.from_new_pct}%)
+                                                    {' → '}
+                                                    <strong>{t.to_name}</strong> ({t.to_old_pct}% → {t.to_new_pct}%)
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                                    {new Date(t.transferred_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                    {t.notes && ` — ${t.notes}`}
+                                                    {t.agreement_doc_id && ' — Agreement attached'}
+                                                </div>
+                                            </div>
+                                            <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{t.percentage}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                !showTransfer && (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                        No transfers yet. Use "New Transfer" to move equity between holders.
+                                    </div>
+                                )
                             )}
                         </div>
                     </>
