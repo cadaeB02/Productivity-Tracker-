@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
@@ -34,6 +35,8 @@ export default function ProjectsPage() {
     const [loading, setLoading] = useState(true);
     const [autoClockRules, setAutoClockRules] = useState([]);
     const [movingProject, setMovingProject] = useState(null);
+    const [expandedNote, setExpandedNote] = useState(null);
+    const [taskNoteText, setTaskNoteText] = useState('');
 
     // New company states
     const [newCompanyName, setNewCompanyName] = useState('');
@@ -680,7 +683,8 @@ export default function ProjectsPage() {
                                                     {projectExpanded && (
                                                         <div style={{ paddingLeft: '16px' }}>
                                                             {projectTasks.map((task) => (
-                                                                <div key={task.id} className="project-item" style={{ fontSize: '0.8rem' }}>
+                                                                <React.Fragment key={task.id}>
+                                                                <div className="project-item" style={{ fontSize: '0.8rem' }}>
                                                                     {editingTask === task.id ? (
                                                                         <input
                                                                             className="input"
@@ -708,6 +712,18 @@ export default function ProjectsPage() {
                                                                         <span style={{ cursor: 'pointer' }} onClick={() => { setEditingTask(task.id); setEditTaskName(task.name); }}>• {task.name}</span>
                                                                     )}
                                                                     <div className="flex gap-1 items-center">
+                                                                        <button
+                                                                            className="btn-icon"
+                                                                            style={{ fontSize: '0.7rem', position: 'relative' }}
+                                                                            onClick={() => {
+                                                                                if (expandedNote === task.id) { setExpandedNote(null); }
+                                                                                else { setExpandedNote(task.id); setTaskNoteText(task.description || ''); }
+                                                                            }}
+                                                                            title="Notes"
+                                                                        >
+                                                                            <Icon name="note" size={10} />
+                                                                            {task.description && <span style={{ position: 'absolute', top: 0, right: 0, width: '5px', height: '5px', borderRadius: '50%', background: 'var(--color-accent)' }} />}
+                                                                        </button>
                                                                         <button className="btn-icon" style={{ fontSize: '0.7rem' }} onClick={() => { setEditingTask(task.id); setEditTaskName(task.name); }} title="Rename">
                                                                             <Icon name="edit" size={10} />
                                                                         </button>
@@ -716,6 +732,25 @@ export default function ProjectsPage() {
                                                                         </button>
                                                                     </div>
                                                                 </div>
+                                                                {expandedNote === task.id && (
+                                                                    <div style={{ marginTop: '4px', marginLeft: '16px', marginBottom: '6px' }}>
+                                                                        <textarea
+                                                                            className="input"
+                                                                            style={{ width: '100%', fontSize: '0.78rem', padding: '6px 10px', minHeight: '60px', resize: 'vertical' }}
+                                                                            placeholder="Add notes for this task..."
+                                                                            value={taskNoteText}
+                                                                            onChange={(e) => setTaskNoteText(e.target.value)}
+                                                                            onBlur={async () => {
+                                                                                if (taskNoteText !== (task.description || '')) {
+                                                                                    await updateTask(task.id, { description: taskNoteText });
+                                                                                    loadData();
+                                                                                }
+                                                                            }}
+                                                                            autoFocus
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                </React.Fragment>
                                                             ))}
                                                             <div className="add-inline">
                                                                 <input
