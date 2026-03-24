@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getCompanies, updateEntityCompliance, updateCompany } from '@/lib/store';
+import { getCompanies, updateEntityCompliance, updateCompany, getEquityHolders, addEquityHolder, updateEquityHolder, deleteEquityHolder } from '@/lib/store';
 
 const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -35,6 +35,12 @@ export default function CompliancePage() {
     const [saved, setSaved] = useState(false);
     const [showEin, setShowEin] = useState(false);
 
+    // Equity
+    const [equityHolders, setEquityHolders] = useState([]);
+    const [showEquityForm, setShowEquityForm] = useState(false);
+    const [editingEquityId, setEditingEquityId] = useState(null);
+    const [equityForm, setEquityForm] = useState({ holder_name: '', percentage: '', role: '', notes: '' });
+
     const loadData = useCallback(async () => {
         try {
             const c = await getCompanies();
@@ -63,11 +69,76 @@ export default function CompliancePage() {
         setLoading(false);
     }, [activeCompanyId]);
 
+    const loadEquity = useCallback(async () => {
+        if (!activeCompanyId) return;
+        try {
+            const holders = await getEquityHolders(activeCompanyId);
+            setEquityHolders(holders);
+        } catch (err) {
+            console.error('Failed to load equity data', err);
+        }
+    }, [activeCompanyId]);
+
     useEffect(() => {
         setLoading(true);
         setShowEin(false);
         loadData();
-    }, [loadData]);
+        loadEquity();
+    }, [loadData, loadEquity]);
+
+    const resetEquityForm = () => {
+        setEquityForm({ holder_name: '', percentage: '', role: '', notes: '' });
+        setEditingEquityId(null);
+        setShowEquityForm(false);
+    };
+
+    const handleEquitySubmit = async (e) => {
+        e.preventDefault();
+        if (!equityForm.holder_name || !equityForm.percentage) return;
+        try {
+            if (editingEquityId) {
+                await updateEquityHolder(editingEquityId, {
+                    holder_name: equityForm.holder_name,
+                    percentage: equityForm.percentage,
+                    role: equityForm.role,
+                    notes: equityForm.notes,
+                });
+            } else {
+                await addEquityHolder({
+                    company_id: activeCompanyId,
+                    holder_name: equityForm.holder_name,
+                    percentage: equityForm.percentage,
+                    role: equityForm.role,
+                    notes: equityForm.notes,
+                });
+            }
+            resetEquityForm();
+            loadEquity();
+        } catch (err) {
+            console.error('Failed to save equity holder', err);
+        }
+    };
+
+    const handleEquityEdit = (holder) => {
+        setEquityForm({
+            holder_name: holder.holder_name,
+            percentage: holder.percentage.toString(),
+            role: holder.role || '',
+            notes: holder.notes || '',
+        });
+        setEditingEquityId(holder.id);
+        setShowEquityForm(true);
+    };
+
+    const handleEquityDelete = async (id) => {
+        if (!confirm('Remove this equity holder?')) return;
+        try {
+            await deleteEquityHolder(id);
+            loadEquity();
+        } catch (err) {
+            console.error('Failed to delete equity holder', err);
+        }
+    };
 
     const handleSave = async () => {
         if (!activeCompanyId) return;
@@ -268,6 +339,132 @@ export default function CompliancePage() {
                                     {saving ? 'Saving...' : saved ? <><Icon name="check" size={14} /> Saved!</> : <><Icon name="save" size={14} /> Save Changes</>}
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Equity / Ownership */}
+                        <div className="card" style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                    <Icon name="chart" size={16} /> Ownership / Equity
+                                </h3>
+                                <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => { setShowEquityForm(!showEquityForm); if (showEquityForm) resetEquityForm(); }}
+                                >
+                                    <Icon name="plus" size={12} /> {showEquityForm ? 'Cancel' : 'Add Holder'}
+                                </button>
+                            </div>
+
+                            {/* Equity Form */}
+                            {showEquityForm && (
+                                <form onSubmit={handleEquitySubmit} style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '10px', marginBottom: '10px' }}>
+                                        <div className="input-group">
+                                            <label>Name</label>
+                                            <input
+                                                className="input"
+                                                placeholder="Shareholder name"
+                                                value={equityForm.holder_name}
+                                                onChange={(e) => setEquityForm(f => ({ ...f, holder_name: e.target.value }))}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>%</label>
+                                            <input
+                                                className="input"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                placeholder="40"
+                                                value={equityForm.percentage}
+                                                onChange={(e) => setEquityForm(f => ({ ...f, percentage: e.target.value }))}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>Role</label>
+                                            <input
+                                                className="input"
+                                                placeholder="e.g. Managing Member"
+                                                value={equityForm.role}
+                                                onChange={(e) => setEquityForm(f => ({ ...f, role: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-primary btn-sm" type="submit">
+                                        <Icon name="save" size={12} /> {editingEquityId ? 'Update' : 'Add'}
+                                    </button>
+                                </form>
+                            )}
+
+                            {/* Equity List */}
+                            {equityHolders.length > 0 ? (
+                                <>
+                                    {/* Percentage Bar */}
+                                    <div className="equity-bar" style={{ marginBottom: '16px' }}>
+                                        {equityHolders.map((h, i) => {
+                                            const colors = ['var(--color-accent)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-danger)', '#8b5cf6', '#ec4899'];
+                                            return (
+                                                <div
+                                                    key={h.id}
+                                                    className="equity-bar-segment"
+                                                    style={{
+                                                        width: `${h.percentage}%`,
+                                                        backgroundColor: colors[i % colors.length],
+                                                    }}
+                                                    title={`${h.holder_name}: ${h.percentage}%`}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Holder Cards */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {equityHolders.map((h, i) => {
+                                            const colors = ['var(--color-accent)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-danger)', '#8b5cf6', '#ec4899'];
+                                            return (
+                                                <div key={h.id} className="equity-holder-row">
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                                                        <div className="equity-color-dot" style={{ backgroundColor: colors[i % colors.length] }} />
+                                                        <div>
+                                                            <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{h.holder_name}</div>
+                                                            {h.role && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{h.role}</div>}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{h.percentage}%</span>
+                                                        <button className="btn-icon" onClick={() => handleEquityEdit(h)} title="Edit">
+                                                            <Icon name="edit" size={13} />
+                                                        </button>
+                                                        <button className="btn-icon" onClick={() => handleEquityDelete(h.id)} title="Remove">
+                                                            <Icon name="trash" size={13} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Total */}
+                                    {(() => {
+                                        const total = equityHolders.reduce((s, h) => s + parseFloat(h.percentage), 0);
+                                        return (
+                                            <div style={{ marginTop: '12px', padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                                                <span style={{ color: 'var(--text-muted)' }}>Total Allocated</span>
+                                                <span style={{ fontWeight: 700, color: total === 100 ? 'var(--color-success)' : total > 100 ? 'var(--color-danger)' : 'var(--color-warning)' }}>
+                                                    {total}%{total !== 100 && ` (${total < 100 ? `${(100 - total).toFixed(2)}% unallocated` : 'over-allocated'})`}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
+                                </>
+                            ) : (
+                                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                    No equity holders added yet. Click "Add Holder" to track ownership.
+                                </div>
+                            )}
                         </div>
                     </>
                 )}
