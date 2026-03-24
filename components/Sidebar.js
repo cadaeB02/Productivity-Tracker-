@@ -62,7 +62,7 @@ export default function Sidebar() {
             <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
                     <h1>HoldCo OS</h1>
-                    <span>Productivity Tracker • V6.0</span>
+                    <span>Productivity Tracker • V7.2</span>
                 </div>
 
                 {/* Company Switcher Dropdown */}
