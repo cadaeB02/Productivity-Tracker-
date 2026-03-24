@@ -2710,15 +2710,22 @@ textarea.input {
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
+  gap: 6px;
   padding: 0 10px;
   overflow: hidden;
-  transition: filter var(--transition-fast);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.2s ease,
+              box-shadow 0.2s ease,
+              z-index 0s;
   z-index: 2;
+  transform-origin: center bottom;
 }
 
 .timeline-block:hover {
   filter: brightness(1.15);
-  z-index: 5;
+  transform: translateY(-3px) scaleY(1.08);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  z-index: 50 !important;
 }
 
 .timeline-block.planned {
@@ -2731,24 +2738,39 @@ textarea.input {
   border: none;
   border-radius: var(--radius-sm);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
 }
 
-.timeline-block.multi-day {
-  border-radius: 0;
-  top: 14px;
-  height: 56px;
+.timeline-block.actual.expanded {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 1px;
+  filter: brightness(1.2);
+}
+
+.timeline-block.sleep-block {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  opacity: 0.6;
+}
+
+.timeline-block.sleep-block .timeline-block-label {
+  color: rgba(199, 183, 255, 0.8);
+  font-weight: 500;
+  font-size: 0.7rem;
+}
+
+.timeline-block.sleep-block:hover {
+  opacity: 0.8;
+  transform: translateY(-2px);
 }
 
 .timeline-block.task-block {
   background: color-mix(in srgb, var(--block-color, #6366f1) 15%, transparent);
   border: 1.5px solid var(--block-color, #6366f1);
-  top: 42px;
-  height: 24px;
-  z-index: 3;
 }
 
 .timeline-block-label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2759,7 +2781,28 @@ textarea.input {
 .timeline-block.actual .timeline-block-label {
   color: white;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+}
+
+/* Timeline detail panel */
+.timeline-detail-panel {
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ==================== SCHEDULE: DURATION CHIPS ==================== */

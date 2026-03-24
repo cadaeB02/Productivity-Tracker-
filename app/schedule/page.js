@@ -103,6 +103,9 @@ export default function SchedulePage() {
     const [showImport, setShowImport] = useState(false);
     const fileInputRef = useRef(null);
 
+    // Timeline detail panel
+    const [expandedBlock, setExpandedBlock] = useState(null);
+
     const timelineRef = useRef(null);
 
     const loadMonthData = useCallback(async () => {
@@ -376,105 +379,182 @@ export default function SchedulePage() {
         return `SCHEDULE BLOCKS:\n${blocksSummary || 'None'}\n\nPENDING TASKS:\n${tasksSummary || 'None'}\n\nAUTO-CLOCK RULES:\n${ruleSummary || 'None'}\n\nCurrent date: ${today.toLocaleDateString()}\nCurrent month view: ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
     };
 
-    // Timeline rendering — with overlap detection
+    // Timeline rendering — merged sessions with layered overlap
     const selectedDayBlocks = getSelectedDayBlocks();
     const selectedDateStr = selectedDate
         ? `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`
         : null;
     const selectedDayTasks = tasks.filter(t => t.scheduled_date === selectedDateStr);
 
-    // Build all timeline items and assign lanes to avoid overlap
+    // Determine if selected date is past, today, or future
+    const selectedDateObj = selectedDateStr ? new Date(`${selectedDateStr}T12:00:00`) : null;
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const isPast = selectedDateStr && selectedDateStr < todayStr;
+    const isToday2 = selectedDateStr === todayStr;
+    const isFuture = selectedDateStr && selectedDateStr > todayStr;
+
+    // Build merged timeline items
     const buildTimelineItems = () => {
         const items = [];
 
-        // Add planned blocks
-        selectedDayBlocks.forEach((block, i) => {
-            const startMins = parseTimeToMinutes(block.start_time);
-            const endMins = parseTimeToMinutes(block.end_time);
-            items.push({
-                id: `block-${i}`,
-                type: 'planned',
-                startMins,
-                endMins,
-                label: block.label,
-                color: block.color || '#6366f1',
-                title: `${block.label}: ${block.start_time} - ${block.end_time}`,
-                data: block,
+        // 1. Sleep block
+        if (sleepLog) {
+            const wakeTime = sleepLog.wake_time ? new Date(sleepLog.wake_time) : null;
+            const sleepTime = sleepLog.sleep_time ? new Date(sleepLog.sleep_time) : null;
+            if (wakeTime) {
+                const wakeMins = wakeTime.getHours() * 60 + wakeTime.getMinutes();
+                if (wakeMins > 0) {
+                    items.push({
+                        id: 'sleep-block',
+                        type: 'sleep',
+                        startMins: 0,
+                        endMins: wakeMins,
+                        label: `Sleep → Wake ${minutesToTime(wakeMins)}`,
+                        color: '#1e1b4b',
+                        sessions: [],
+                    });
+                }
+            }
+            if (sleepTime) {
+                const sleepMins = sleepTime.getHours() * 60 + sleepTime.getMinutes();
+                if (sleepMins > 0) {
+                    items.push({
+                        id: 'sleep-block-night',
+                        type: 'sleep',
+                        startMins: sleepMins,
+                        endMins: 1440,
+                        label: `Sleep ${minutesToTime(sleepMins)}`,
+                        color: '#1e1b4b',
+                        sessions: [],
+                    });
+                }
+            }
+        }
+
+        // 2. Merge actual sessions by task/project (for past/today only)
+        if (isPast || isToday2) {
+            const sessionsByKey = {};
+            daySessions.forEach(session => {
+                const taskName = session.tasks?.name || session.projects?.name || 'Session';
+                const color = session.companies?.color || '#6366f1';
+                const key = `${taskName}__${color}`;
+
+                const start = new Date(session.start_time);
+                const end = session.end_time ? new Date(session.end_time) : new Date();
+                const dayStart = new Date(`${selectedDateStr}T00:00:00`);
+                const dayEnd = new Date(`${selectedDateStr}T23:59:59`);
+                const effectiveStart = start < dayStart ? dayStart : start;
+                const effectiveEnd = end > dayEnd ? dayEnd : end;
+                const startMins = effectiveStart.getHours() * 60 + effectiveStart.getMinutes();
+                const endMins = effectiveEnd.getHours() * 60 + effectiveEnd.getMinutes();
+
+                if (!sessionsByKey[key]) {
+                    sessionsByKey[key] = {
+                        taskName,
+                        color,
+                        companyName: session.companies?.name || '',
+                        startMins,
+                        endMins: Math.max(endMins, startMins + 5),
+                        sessions: [session],
+                    };
+                } else {
+                    sessionsByKey[key].startMins = Math.min(sessionsByKey[key].startMins, startMins);
+                    sessionsByKey[key].endMins = Math.max(sessionsByKey[key].endMins, Math.max(endMins, startMins + 5));
+                    sessionsByKey[key].sessions.push(session);
+                }
             });
-        });
 
-        // Add actual sessions
-        daySessions.forEach((session, i) => {
-            const start = new Date(session.start_time);
-            const end = session.end_time ? new Date(session.end_time) : new Date();
-            const dayStart = new Date(`${selectedDateStr}T00:00:00`);
-            const dayEnd = new Date(`${selectedDateStr}T23:59:59`);
-            const effectiveStart = start < dayStart ? dayStart : start;
-            const effectiveEnd = end > dayEnd ? dayEnd : end;
-            const startMins = effectiveStart.getHours() * 60 + effectiveStart.getMinutes();
-            const endMins = effectiveEnd.getHours() * 60 + effectiveEnd.getMinutes();
-            const isMultiDay = start < dayStart || end > dayEnd || !session.end_time;
-            const color = session.companies?.color || '#6366f1';
-
-            items.push({
-                id: `session-${i}`,
-                type: 'actual',
-                startMins,
-                endMins: Math.max(endMins, startMins + 5),
-                label: session.tasks?.name || session.projects?.name || '',
-                color,
-                isMultiDay,
-                title: `${session.tasks?.name || session.projects?.name || 'Session'}: ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${session.end_time ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active'}`,
-                data: session,
+            Object.entries(sessionsByKey).forEach(([key, merged], i) => {
+                const totalMins = merged.sessions.reduce((sum, s) => {
+                    const start = new Date(s.start_time);
+                    const end = s.end_time ? new Date(s.end_time) : new Date();
+                    return sum + (end - start) / 60000;
+                }, 0);
+                items.push({
+                    id: `merged-${i}`,
+                    type: 'actual',
+                    startMins: merged.startMins,
+                    endMins: merged.endMins,
+                    label: merged.taskName,
+                    color: merged.color,
+                    companyName: merged.companyName,
+                    sessionCount: merged.sessions.length,
+                    totalMins: Math.round(totalMins),
+                    sessions: merged.sessions,
+                });
             });
-        });
+        }
 
-        // Add scheduled tasks
-        selectedDayTasks.forEach((task, i) => {
-            if (!task.scheduled_start_time) return;
-            const startMins = parseTimeToMinutes(task.scheduled_start_time);
-            const durMins = DURATION_MINUTES[task.duration_estimate] || 45;
-            const dOpt = DURATION_OPTIONS.find(d => d.value === task.duration_estimate);
-            items.push({
-                id: `task-${i}`,
-                type: 'task',
-                startMins,
-                endMins: startMins + durMins,
-                label: task.title,
-                color: dOpt?.color || '#6366f1',
-                title: `${task.title} (${task.duration_estimate})`,
-                data: task,
+        // 3. Planned blocks (show for today & future)
+        if (isToday2 || isFuture) {
+            selectedDayBlocks.forEach((block, i) => {
+                const startMins = parseTimeToMinutes(block.start_time);
+                const endMins = parseTimeToMinutes(block.end_time);
+                items.push({
+                    id: `block-${i}`,
+                    type: 'planned',
+                    startMins,
+                    endMins,
+                    label: block.label,
+                    color: block.color || '#6366f1',
+                    sessions: [],
+                    data: block,
+                });
             });
-        });
+        }
 
-        // Sort by start time
-        items.sort((a, b) => a.startMins - b.startMins);
+        // 4. Scheduled tasks (show for today & future)
+        if (isToday2 || isFuture) {
+            selectedDayTasks.forEach((task, i) => {
+                if (!task.scheduled_start_time) return;
+                const startMins = parseTimeToMinutes(task.scheduled_start_time);
+                const durMins = DURATION_MINUTES[task.duration_estimate] || 45;
+                const dOpt = DURATION_OPTIONS.find(d => d.value === task.duration_estimate);
+                items.push({
+                    id: `task-${i}`,
+                    type: 'task',
+                    startMins,
+                    endMins: startMins + durMins,
+                    label: task.title,
+                    color: dOpt?.color || '#6366f1',
+                    sessions: [],
+                    data: task,
+                });
+            });
+        }
 
-        // Assign lanes (greedy algorithm)
-        const lanes = []; // each lane tracks the end time of the last item
-        items.forEach(item => {
+        // Sort by start time, then by duration descending (longest first for layering)
+        items.sort((a, b) => a.startMins - b.startMins || (b.endMins - b.startMins) - (a.endMins - a.startMins));
+
+        // Assign layers for overlapping items (skip sleep blocks)
+        const nonSleep = items.filter(it => it.type !== 'sleep');
+        const layers = [];
+        nonSleep.forEach(item => {
             let placed = false;
-            for (let l = 0; l < lanes.length; l++) {
-                if (item.startMins >= lanes[l]) {
-                    item.lane = l;
-                    lanes[l] = item.endMins;
+            for (let l = 0; l < layers.length; l++) {
+                if (item.startMins >= layers[l]) {
+                    item.layer = l;
+                    layers[l] = item.endMins;
                     placed = true;
                     break;
                 }
             }
             if (!placed) {
-                item.lane = lanes.length;
-                lanes.push(item.endMins);
+                item.layer = layers.length;
+                layers.push(item.endMins);
             }
         });
+        // Sleep blocks always layer 0
+        items.filter(it => it.type === 'sleep').forEach(it => { it.layer = 0; });
 
-        return { items, laneCount: Math.max(lanes.length, 1) };
+        return { items, layerCount: Math.max(layers.length, 1) };
     };
 
-    const timelineData = selectedDate ? buildTimelineItems() : { items: [], laneCount: 1 };
-    const LANE_HEIGHT = 36;
-    const TIMELINE_TOP = 18;
-    const timelineHeight = TIMELINE_TOP + (timelineData.laneCount * LANE_HEIGHT) + 8;
+    const timelineData = selectedDate ? buildTimelineItems() : { items: [], layerCount: 1 };
+    const BASE_HEIGHT = 48;
+    const LAYER_OFFSET = 8; // pixels each overlapping layer is offset down
+    const TIMELINE_TOP = 20;
+    const timelineHeight = TIMELINE_TOP + BASE_HEIGHT + (Math.max(timelineData.layerCount - 1, 0) * LAYER_OFFSET) + 12;
 
     if (loading) {
         return (
@@ -661,7 +741,7 @@ export default function SchedulePage() {
                         </div>
                     )}
 
-                    {/* Timeline with lane-based stacking */}
+                    {/* Timeline with layered overlap */}
                     <div className="day-timeline-container" ref={timelineRef}>
                         <div className="day-timeline" style={{ height: `${timelineHeight}px` }}>
                             {/* Hour markers */}
@@ -672,35 +752,32 @@ export default function SchedulePage() {
                                 </div>
                             ))}
 
-                            {/* Sleep indicators */}
-                            {sleepLog && (
-                                <>
-                                    {sleepLog.wake_time && (
-                                        <div
-                                            className="timeline-dot wake"
-                                            style={{ left: `${(new Date(sleepLog.wake_time).getHours() * 60 + new Date(sleepLog.wake_time).getMinutes()) / 1440 * 100}%` }}
-                                            title={`Wake: ${new Date(sleepLog.wake_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                        >
-                                            <Icon name="sun" size={12} />
-                                        </div>
-                                    )}
-                                    {sleepLog.sleep_time && (
-                                        <div
-                                            className="timeline-dot sleep"
-                                            style={{ left: `${(new Date(sleepLog.sleep_time).getHours() * 60 + new Date(sleepLog.sleep_time).getMinutes()) / 1440 * 100}%` }}
-                                            title={`Sleep: ${new Date(sleepLog.sleep_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                        >
-                                            <Icon name="moon" size={12} />
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
-                            {/* All timeline items with lane positioning */}
+                            {/* Render all timeline items with layered offsets */}
                             {timelineData.items.map(item => {
                                 const left = (item.startMins / 1440) * 100;
                                 const width = ((item.endMins - item.startMins) / 1440) * 100;
-                                const top = TIMELINE_TOP + (item.lane * LANE_HEIGHT);
+                                const top = TIMELINE_TOP + (item.layer * LAYER_OFFSET);
+                                const isExpanded = expandedBlock === item.id;
+
+                                if (item.type === 'sleep') {
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className="timeline-block sleep-block"
+                                            style={{
+                                                left: `${left}%`,
+                                                width: `${Math.max(width, 0.5)}%`,
+                                                top: `${top}px`,
+                                                height: `${BASE_HEIGHT}px`,
+                                                zIndex: 1,
+                                            }}
+                                            title={item.label}
+                                        >
+                                            <Icon name="moon" size={11} style={{ opacity: 0.6, flexShrink: 0 }} />
+                                            <span className="timeline-block-label">{item.label}</span>
+                                        </div>
+                                    );
+                                }
 
                                 if (item.type === 'planned') {
                                     return (
@@ -711,11 +788,12 @@ export default function SchedulePage() {
                                                 left: `${left}%`,
                                                 width: `${Math.max(width, 1)}%`,
                                                 top: `${top}px`,
-                                                height: `${LANE_HEIGHT - 4}px`,
+                                                height: `${BASE_HEIGHT}px`,
                                                 borderColor: item.color,
                                                 '--block-color': item.color,
+                                                zIndex: 2 + item.layer,
                                             }}
-                                            title={item.title}
+                                            title={`${item.label}: ${item.data?.start_time} - ${item.data?.end_time}`}
                                         >
                                             <span className="timeline-block-label">{item.label}</span>
                                         </div>
@@ -723,19 +801,25 @@ export default function SchedulePage() {
                                 }
 
                                 if (item.type === 'actual') {
+                                    const durationStr = item.totalMins >= 60
+                                        ? `${Math.floor(item.totalMins / 60)}h ${item.totalMins % 60}m`
+                                        : `${item.totalMins}m`;
                                     return (
                                         <div
                                             key={item.id}
-                                            className={`timeline-block actual ${item.isMultiDay ? 'multi-day' : ''}`}
+                                            className={`timeline-block actual ${isExpanded ? 'expanded' : ''}`}
                                             style={{
                                                 left: `${left}%`,
                                                 width: `${Math.max(width, 0.5)}%`,
                                                 top: `${top}px`,
-                                                height: `${LANE_HEIGHT - 4}px`,
+                                                height: `${BASE_HEIGHT}px`,
                                                 backgroundColor: item.color,
-                                                opacity: item.isMultiDay ? 0.4 : 0.85,
+                                                opacity: 0.9,
+                                                zIndex: isExpanded ? 100 : 3 + item.layer,
+                                                cursor: item.sessions?.length > 0 ? 'pointer' : 'default',
                                             }}
-                                            title={item.title}
+                                            title={`${item.label} • ${durationStr} (${item.sessionCount} session${item.sessionCount !== 1 ? 's' : ''})`}
+                                            onClick={() => item.sessions?.length > 0 && setExpandedBlock(isExpanded ? null : item.id)}
                                         >
                                             <span className="timeline-block-label">{item.label}</span>
                                         </div>
@@ -751,11 +835,12 @@ export default function SchedulePage() {
                                                 left: `${left}%`,
                                                 width: `${Math.max(width, 1)}%`,
                                                 top: `${top}px`,
-                                                height: `${LANE_HEIGHT - 4}px`,
+                                                height: `${BASE_HEIGHT}px`,
                                                 borderColor: item.color,
                                                 '--block-color': item.color,
+                                                zIndex: 2 + item.layer,
                                             }}
-                                            title={item.title}
+                                            title={`${item.label}`}
                                         >
                                             <span className="timeline-block-label">{item.label}</span>
                                         </div>
@@ -766,6 +851,52 @@ export default function SchedulePage() {
                             })}
                         </div>
                     </div>
+
+                    {/* Expanded block detail panel */}
+                    {expandedBlock && (() => {
+                        const block = timelineData.items.find(it => it.id === expandedBlock);
+                        if (!block || !block.sessions?.length) return null;
+                        const totalMins = block.totalMins || 0;
+                        const durationStr = totalMins >= 60
+                            ? `${Math.floor(totalMins / 60)}h ${totalMins % 60}m`
+                            : `${totalMins}m`;
+                        return (
+                            <div className="timeline-detail-panel">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: block.color }} />
+                                        <strong style={{ fontSize: '0.9rem' }}>{block.label}</strong>
+                                        {block.companyName && (
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({block.companyName})</span>
+                                        )}
+                                    </div>
+                                    <button className="btn-icon" onClick={() => setExpandedBlock(null)} title="Close">
+                                        <Icon name="close" size={14} />
+                                    </button>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                                    {block.sessionCount} session{block.sessionCount !== 1 ? 's' : ''} • {durationStr} total
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                                    {block.sessions.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)).map((session, si) => {
+                                        const s = new Date(session.start_time);
+                                        const e = session.end_time ? new Date(session.end_time) : null;
+                                        const dur = e ? Math.round((e - s) / 60000) : 0;
+                                        const durStr = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60}m` : `${dur}m`;
+                                        return (
+                                            <div key={si} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
+                                                <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)' }}>
+                                                    {s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {e ? ` → ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ' → Active'}
+                                                </span>
+                                                <span style={{ color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{durStr}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* Day summary */}
                     <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
