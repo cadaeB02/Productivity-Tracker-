@@ -33,6 +33,7 @@ export default function ProjectsPage() {
     const [expanded, setExpanded] = useState({});
     const [loading, setLoading] = useState(true);
     const [autoClockRules, setAutoClockRules] = useState([]);
+    const [movingProject, setMovingProject] = useState(null);
 
     // New company states
     const [newCompanyName, setNewCompanyName] = useState('');
@@ -209,6 +210,13 @@ export default function ProjectsPage() {
     const handleDeleteProject = async (id) => {
         if (!confirm('Delete this project and all its tasks?')) return;
         await deleteProject(id);
+        loadData();
+    };
+
+    const handleMoveProject = async (projectId, targetCompanyId) => {
+        if (!targetCompanyId) return;
+        await updateProject(projectId, { company_id: targetCompanyId });
+        setMovingProject(null);
         loadData();
     };
 
@@ -640,11 +648,34 @@ export default function ProjectsPage() {
                                                             <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); setEditingProject(project.id); setEditProjectName(project.name); }} title="Rename">
                                                                 <Icon name="edit" size={11} />
                                                             </button>
+                                                            <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); setMovingProject(movingProject === project.id ? null : project.id); }} title="Move to another company">
+                                                                <Icon name="folder" size={11} />
+                                                            </button>
                                                             <button className="btn-icon" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}>
                                                                 <Icon name="close" size={12} />
                                                             </button>
                                                         </div>
                                                     </div>
+
+                                                    {movingProject === project.id && (
+                                                        <div style={{ padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', marginBottom: '8px', display: 'flex', gap: '8px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Move to:</span>
+                                                            <select
+                                                                className="input"
+                                                                style={{ flex: 1, padding: '4px 8px', fontSize: '0.8rem' }}
+                                                                defaultValue=""
+                                                                onChange={(e) => handleMoveProject(project.id, e.target.value)}
+                                                            >
+                                                                <option value="">Select company...</option>
+                                                                {companies.filter(c => c.id !== company.id).map(c => (
+                                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                                ))}
+                                                            </select>
+                                                            <button className="btn-icon" onClick={() => setMovingProject(null)}>
+                                                                <Icon name="close" size={12} />
+                                                            </button>
+                                                        </div>
+                                                    )}
 
                                                     {projectExpanded && (
                                                         <div style={{ paddingLeft: '16px' }}>
