@@ -8,8 +8,13 @@ export default function AppLayout({ children }) {
 
     if (loading) {
         return (
-            <div className="loading-page">
-                <div className="loading-spinner" />
+            <div className="app-layout">
+                <Sidebar />
+                <main className="main-content">
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}>
+                        <div className="loading-spinner" />
+                    </div>
+                </main>
             </div>
         );
     }
