@@ -27,7 +27,7 @@ function getRenewalStatus(dateStr) {
 }
 
 export default function CompliancePage() {
-    const { activeCompanyId, activeCompany } = useCompany();
+    const { activeCompanyId, activeCompany, setActiveCompanyId } = useCompany();
     const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editFields, setEditFields] = useState({});
@@ -765,6 +765,15 @@ export default function CompliancePage() {
                                                 </span>
                                             </div>
                                         )}
+                                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+                                            <button
+                                                className="btn btn-primary"
+                                                style={{ fontSize: '0.75rem', padding: '4px 12px', width: '100%' }}
+                                                onClick={() => setActiveCompanyId(company.id)}
+                                            >
+                                                <Icon name="edit" size={12} /> Manage
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -791,9 +800,16 @@ export default function CompliancePage() {
                                     )}
                                 </div>
                                 <div className="compliance-card-body">
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        Not a registered entity — select this company and toggle to LLC to add compliance info.
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                        Not a registered entity — click below to set up as an LLC.
                                     </div>
+                                    <button
+                                        className="btn"
+                                        style={{ fontSize: '0.75rem', padding: '4px 12px', width: '100%', border: '1px solid var(--border-color)' }}
+                                        onClick={() => setActiveCompanyId(company.id)}
+                                    >
+                                        <Icon name="settings" size={12} /> Set Up
+                                    </button>
                                 </div>
                             </div>
                         ))}

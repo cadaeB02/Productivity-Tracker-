@@ -329,6 +329,9 @@ export default function TreasuryPage() {
         return { ...company, revenue: rev, expenses: exp, net: rev - exp, count: compTxns.length };
     }).filter(c => c.count > 0);
 
+    const companyMap = {};
+    companies.forEach(c => { companyMap[c.id] = c; });
+
     return (
         <AppLayout>
             <div className="page-header">
@@ -358,13 +361,112 @@ export default function TreasuryPage() {
                 </div>
             </div>
 
+            {/* Add Transaction Button */}
+            <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); if (showForm) resetForm(); }}>
+                    <Icon name="plus" size={14} /> {showForm ? 'Cancel' : 'Add Transaction'}
+                </button>
+            </div>
+
+            {/* Entry Form (Global) */}
+            {showForm && (
+                <div className="card" style={{ marginBottom: '20px' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px' }}>
+                        {editingId ? 'Edit Transaction' : 'New Transaction'}
+                    </h3>
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                            <div className="input-group">
+                                <label>Company</label>
+                                <select
+                                    className="input"
+                                    value={form.company_id}
+                                    onChange={(e) => setForm(f => ({ ...f, company_id: e.target.value }))}
+                                    required
+                                >
+                                    <option value="">Select company...</option>
+                                    {companies.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="input-group">
+                                <label>Type</label>
+                                <div className="treasury-type-toggle">
+                                    <button
+                                        type="button"
+                                        className={`treasury-type-btn ${form.type === 'revenue' ? 'active revenue' : ''}`}
+                                        onClick={() => setForm(f => ({ ...f, type: 'revenue', category: '' }))}
+                                    >
+                                        <Icon name="arrow-down" size={12} /> Revenue
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`treasury-type-btn ${form.type === 'expense' ? 'active expense' : ''}`}
+                                        onClick={() => setForm(f => ({ ...f, type: 'expense', category: '' }))}
+                                    >
+                                        <Icon name="arrow-up" size={12} /> Expense
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="input-group">
+                                <label>Amount ($)</label>
+                                <input
+                                    className="input"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0.00"
+                                    value={form.amount}
+                                    onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))}
+                                    required
+                                />
+                            </div>
+                            <div className="input-group">
+                                <label>Category</label>
+                                <select
+                                    className="input"
+                                    value={form.category}
+                                    onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
+                                >
+                                    <option value="">Select category...</option>
+                                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div className="input-group">
+                                <label>Date</label>
+                                <input
+                                    className="input"
+                                    type="date"
+                                    value={form.date}
+                                    onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="input-group" style={{ marginBottom: '16px' }}>
+                            <label>Description</label>
+                            <input
+                                className="input"
+                                placeholder="What was this for?"
+                                value={form.description}
+                                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                            />
+                        </div>
+                        <button className="btn btn-primary" type="submit">
+                            <Icon name="save" size={14} /> {editingId ? 'Update' : 'Add'} Transaction
+                        </button>
+                    </form>
+                </div>
+            )}
+
             {/* Per-Company Breakdown */}
-            {companyBreakdowns.length > 0 ? (
+            {companyBreakdowns.length > 0 && (
                 <>
                     <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
                         Per-Company P&L
                     </h3>
-                    <div className="compliance-grid">
+                    <div className="compliance-grid" style={{ marginBottom: '24px' }}>
                         {companyBreakdowns.map(company => (
                             <div key={company.id} className="compliance-card">
                                 <div className="compliance-card-accent" style={{ backgroundColor: company.color }} />
@@ -392,11 +494,61 @@ export default function TreasuryPage() {
                         ))}
                     </div>
                 </>
-            ) : (
+            )}
+
+            {/* All Transactions List */}
+            {transactions.length > 0 && (
+                <div className="card">
+                    <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', padding: '16px 16px 0' }}>
+                        All Transactions
+                    </h3>
+                    <div className="treasury-list">
+                        {transactions.map(txn => {
+                            const company = companyMap[txn.company_id];
+                            return (
+                                <div key={txn.id} className="treasury-row">
+                                    <div className="treasury-row-left">
+                                        <span className={`treasury-type-dot ${txn.type}`} />
+                                        <div>
+                                            <div className="treasury-row-desc">
+                                                {txn.description || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No description</span>}
+                                            </div>
+                                            <div className="treasury-row-meta">
+                                                {formatDate(txn.date)}
+                                                {txn.category && <> · <span className="treasury-category">{txn.category}</span></>}
+                                                {company && (
+                                                    <>
+                                                        {' '}·{' '}
+                                                        <span className="color-dot" style={{ backgroundColor: company.color, width: '6px', height: '6px', borderRadius: '50%', display: 'inline-block' }} />
+                                                        {' '}{company.name}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="treasury-row-right">
+                                        <span className={`treasury-amount ${txn.type}`}>
+                                            {txn.type === 'expense' ? '−' : '+'}{formatCurrency(txn.amount)}
+                                        </span>
+                                        <button className="btn-icon" onClick={() => handleEdit(txn)} title="Edit">
+                                            <Icon name="edit" size={14} />
+                                        </button>
+                                        <button className="btn-icon" onClick={() => handleDelete(txn.id)} title="Delete">
+                                            <Icon name="trash" size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {transactions.length === 0 && companyBreakdowns.length === 0 && (
                 <div className="empty-state">
                     <div className="empty-state-icon"><Icon name="dollar" size={48} /></div>
                     <h3>No financial data yet</h3>
-                    <p>Select a company from the sidebar switcher and add your first transaction.</p>
+                    <p>Click "Add Transaction" above to start tracking cash flow across your companies.</p>
                 </div>
             )}
         </AppLayout>
