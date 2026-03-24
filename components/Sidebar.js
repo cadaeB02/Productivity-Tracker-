@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
+import { useCompany } from '@/components/CompanyContext';
 import Icon from '@/components/Icon';
 
 const NAV_ITEMS = [
@@ -20,7 +21,9 @@ const NAV_ITEMS = [
 export default function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
+    const { companies, activeCompanyId, activeCompany, setActiveCompanyId, setShowSwitcher } = useCompany();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -36,7 +39,7 @@ export default function Sidebar() {
         <>
             {/* Mobile header */}
             <div className="mobile-header">
-                <h1>FocusArch</h1>
+                <h1>HoldCo OS</h1>
                 <button
                     className="mobile-menu-btn"
                     onClick={() => setMobileOpen(!mobileOpen)}
@@ -55,8 +58,64 @@ export default function Sidebar() {
             {/* Sidebar */}
             <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
-                    <h1>Parallax</h1>
-                    <span>Productivity Tracker • V5.0</span>
+                    <h1>HoldCo OS</h1>
+                    <span>Productivity Tracker • V6.0</span>
+                </div>
+
+                {/* Company Switcher Dropdown */}
+                <div className="sidebar-company-switcher">
+                    <button
+                        className="company-switcher-btn"
+                        onClick={() => setDropdownOpen(!dropdownOpen)}
+                    >
+                        <div className="company-switcher-current">
+                            {activeCompany ? (
+                                <>
+                                    <span className="color-dot" style={{ backgroundColor: activeCompany.color, width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 }} />
+                                    <span className="company-switcher-name">{activeCompany.name}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Icon name="grid" size={12} />
+                                    <span className="company-switcher-name">Global View</span>
+                                </>
+                            )}
+                        </div>
+                        <Icon name={dropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+                    </button>
+
+                    {dropdownOpen && (
+                        <div className="company-switcher-dropdown">
+                            <div
+                                className={`company-switcher-option ${!activeCompanyId ? 'active' : ''}`}
+                                onClick={() => { setActiveCompanyId(null); setDropdownOpen(false); }}
+                            >
+                                <Icon name="grid" size={12} />
+                                <span>Global View</span>
+                                {!activeCompanyId && <Icon name="check" size={12} />}
+                            </div>
+                            {companies.map((c) => (
+                                <div
+                                    key={c.id}
+                                    className={`company-switcher-option ${activeCompanyId === c.id ? 'active' : ''}`}
+                                    onClick={() => { setActiveCompanyId(c.id); setDropdownOpen(false); }}
+                                >
+                                    <span className="color-dot" style={{ backgroundColor: c.color, width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 }} />
+                                    <span>{c.name}</span>
+                                    {activeCompanyId === c.id && <Icon name="check" size={12} />}
+                                </div>
+                            ))}
+                            <div className="company-switcher-divider" />
+                            <div
+                                className="company-switcher-option switcher-cmd"
+                                onClick={() => { setDropdownOpen(false); setShowSwitcher(true); }}
+                            >
+                                <Icon name="search" size={12} />
+                                <span>Quick Switch</span>
+                                <kbd className="switcher-kbd-small">⌘K</kbd>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <nav className="sidebar-nav">

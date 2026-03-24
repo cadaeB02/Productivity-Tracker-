@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import SessionDetailModal from '@/components/SessionDetailModal';
+import { useCompany } from '@/components/CompanyContext';
 import {
     getSessions,
     getCompanies,
@@ -17,12 +18,12 @@ import {
 import { formatDuration, formatDurationShort, formatDate, formatTime, getRelativeDate } from '@/lib/utils';
 
 export default function HistoryPage() {
+    const { activeCompanyId } = useCompany();
     const [sessions, setSessions] = useState([]);
     const [companies, setCompanies] = useState([]);
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filterCompany, setFilterCompany] = useState('');
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [selectedSession, setSelectedSession] = useState(null);
 
@@ -38,7 +39,7 @@ export default function HistoryPage() {
     const loadData = useCallback(async () => {
         try {
             const filters = {};
-            if (filterCompany) filters.companyId = filterCompany;
+            if (activeCompanyId) filters.companyId = activeCompanyId;
             const [s, c, p, t] = await Promise.all([
                 getSessions(filters),
                 getCompanies(),
@@ -53,7 +54,7 @@ export default function HistoryPage() {
             console.error('Failed to load history', err);
         }
         setLoading(false);
-    }, [filterCompany]);
+    }, [activeCompanyId]);
 
     useEffect(() => {
         loadData();
@@ -134,19 +135,7 @@ export default function HistoryPage() {
                 </div>
             </div>
 
-            {/* Filter */}
-            <div className="filter-bar">
-                <select
-                    className="input"
-                    value={filterCompany}
-                    onChange={(e) => setFilterCompany(e.target.value)}
-                >
-                    <option value="">All Companies</option>
-                    {companies.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </select>
-            </div>
+            {/* Company filter is now handled by the global switcher in the sidebar */}
 
             {/* Manual Entry Form */}
             {showManualEntry && (

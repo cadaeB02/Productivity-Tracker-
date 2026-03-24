@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
+import { useCompany } from '@/components/CompanyContext';
 import {
     getCompanies,
     getProjects,
@@ -25,6 +26,7 @@ import { COMPANY_COLORS } from '@/lib/utils';
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function ProjectsPage() {
+    const { activeCompanyId, refreshCompanies: refreshCtxCompanies } = useCompany();
     const [companies, setCompanies] = useState([]);
     const [projectsByCompany, setProjectsByCompany] = useState({});
     const [tasksByProject, setTasksByProject] = useState({});
@@ -416,7 +418,12 @@ export default function ProjectsPage() {
             )}
 
             {/* Companies Tile Grid */}
-            {companies.length === 0 && !showNewCompany ? (
+            {(() => {
+                const visibleCompanies = activeCompanyId
+                    ? companies.filter(c => c.id === activeCompanyId)
+                    : companies;
+                return visibleCompanies;
+            })().length === 0 && !showNewCompany ? (
                 <div className="empty-state">
                     <div className="empty-state-icon"><Icon name="building" size={48} /></div>
                     <h3>No companies yet</h3>
@@ -425,7 +432,7 @@ export default function ProjectsPage() {
                 </div>
             ) : (
                 <div className="company-tile-grid">
-                    {companies.map((company) => {
+                    {(activeCompanyId ? companies.filter(c => c.id === activeCompanyId) : companies).map((company) => {
                         const companyProjects = projectsByCompany[company.id] || [];
                         const isOpen = expanded[company.id] === true;
                         const isPhysical = company.company_type === 'physical';

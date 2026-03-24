@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import SessionDetailModal from '@/components/SessionDetailModal';
+import { useCompany } from '@/components/CompanyContext';
 import { getStats, getCompanies, getPayEstimate } from '@/lib/store';
 import { formatDurationShort, formatTime } from '@/lib/utils';
 
@@ -70,6 +71,7 @@ function BarTooltip({ data, position }) {
 }
 
 export default function StatsPage() {
+    const { activeCompanyId } = useCompany();
     const [sessions, setSessions] = useState([]);
     const [companies, setCompanies] = useState([]);
     const [payEstimates, setPayEstimates] = useState([]);
@@ -84,10 +86,16 @@ export default function StatsPage() {
         setLoading(true);
         try {
             const [data, comps] = await Promise.all([getStats(dateRange), getCompanies()]);
-            setSessions(data);
+            // Filter by active company if one is selected
+            const filteredData = activeCompanyId
+                ? data.filter(s => s.company_id === activeCompanyId)
+                : data;
+            setSessions(filteredData);
             setCompanies(comps);
 
-            const physicalCompanies = comps.filter(c => c.company_type === 'physical' && c.pay_rate);
+            const physicalCompanies = activeCompanyId
+                ? comps.filter(c => c.id === activeCompanyId && c.company_type === 'physical' && c.pay_rate)
+                : comps.filter(c => c.company_type === 'physical' && c.pay_rate);
             const estimates = await Promise.all(
                 physicalCompanies.map(c => getPayEstimate(c.id, dateRange).catch(() => null))
             );
@@ -96,7 +104,7 @@ export default function StatsPage() {
             console.error('Failed to load stats', err);
         }
         setLoading(false);
-    }, [dateRange]);
+    }, [dateRange, activeCompanyId]);
 
     useEffect(() => {
         loadStats();

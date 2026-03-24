@@ -1,19 +1,25 @@
 # Parallax Productivity Tracker — Agent Guide
 
-**Version: 5.0** | **Last Updated: 2026-03-23**
+**Version: 6.0** | **Last Updated: 2026-03-24**
 
 ## Overview
 
 This document is for the OpenClaw agent. After authenticating via `/api/agent-auth`, read this guide to understand the site structure and available actions.
 
+## V6.0 Changes
+
+- **NEW: Entity Foundation** — Companies can now represent formal LLCs with `is_entity`, `legal_name`, `ein`, compliance fields
+- **NEW: Entity Functions** — `getEntities()`, `updateEntityCompliance()` in store.js
+- All V5.0 features remain unchanged
+
 ## V5.0 Changes
 
-- **NEW: Schedule Tab** — Calendar grid + horizontal day timeline + task notepad + AI scheduling
-- **NEW: Auto-Clock** — Physical jobs auto-start at configured times (via Vercel cron)
-- **NEW: Agent Schedule API** — Read/write schedule data via `/api/agent-schedule`
-- **REDESIGNED: Projects Page** — Tile grid layout with drag reorder
-- **NEW: Sleep Tracking** — Manual + Apple Health import
-- **NEW: Multi-day Sessions** — Sessions can span midnight
+- **Schedule Tab** — Calendar grid + horizontal day timeline + task notepad + AI scheduling
+- **Auto-Clock** — Physical jobs auto-start at configured times (via Vercel cron)
+- **Agent Schedule API** — Read/write schedule data via `/api/agent-schedule`
+- **Projects Page** — Tile grid layout with drag reorder
+- **Sleep Tracking** — Manual + Apple Health import
+- **Multi-day Sessions** — Sessions can span midnight
 
 ---
 
@@ -36,6 +42,7 @@ This document is for the OpenClaw agent. After authenticating via `/api/agent-au
 ### Core Entities
 - **Companies** → Projects → Tasks → Sessions
 - Companies have `company_type` ('physical' or 'digital'), color, pay config
+- Companies with `is_entity = true` are formal LLCs with `legal_name`, `ein`, `state_of_formation`, `formation_date`, `state_renewal_date`, `registered_agent`, `domains`
 - Sessions store `start_time`, `end_time`, `duration`, `summary`
 
 ### Schedule Entities (V5.0)

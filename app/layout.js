@@ -1,9 +1,11 @@
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { CompanyProvider } from '@/components/CompanyContext';
+import CompanySwitcher from '@/components/CompanySwitcher';
 
 export const metadata = {
-    title: 'Parallax — Productivity Tracker',
+    title: 'HoldCo OS — Productivity Tracker',
     description: 'See your time from every angle. Track work across companies, projects, and contexts.',
     icons: { icon: '/icon.svg' },
 };
@@ -28,7 +30,10 @@ export default function RootLayout({ children }) {
             <body>
                 <ThemeProvider>
                     <AuthProvider>
-                        {children}
+                        <CompanyProvider>
+                            {children}
+                            <CompanySwitcher />
+                        </CompanyProvider>
                     </AuthProvider>
                 </ThemeProvider>
             </body>

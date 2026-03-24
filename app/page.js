@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import ClockOutModal from '@/components/ClockOutModal';
 import PendingSummariesModal from '@/components/PendingSummariesModal';
 import Icon from '@/components/Icon';
+import { useCompany } from '@/components/CompanyContext';
 import {
     getCompanies,
     getAllProjects,
@@ -19,6 +20,7 @@ import {
 import { formatDuration, formatTime } from '@/lib/utils';
 
 export default function TimerPage() {
+    const { activeCompanyId, activeCompany } = useCompany();
     const [companies, setCompanies] = useState([]);
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
@@ -217,8 +219,12 @@ export default function TimerPage() {
         loadData();
     };
 
-    // Group tasks by company → project
-    const groupedTasks = companies.map((company) => {
+    // Group tasks by company → project, filtered by active company
+    const filteredCompanies = activeCompanyId
+        ? companies.filter((c) => c.id === activeCompanyId)
+        : companies;
+
+    const groupedTasks = filteredCompanies.map((company) => {
         const companyProjects = projects.filter((p) => p.company_id === company.id);
         return {
             ...company,
