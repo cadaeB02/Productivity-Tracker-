@@ -175,7 +175,7 @@ export default function FilingPage() {
 
             {/* Category Tabs */}
             <div className="notes-tabs" style={{ marginBottom: '16px' }}>
-                {DOC_CATEGORIES.map(cat => (
+                {DOC_CATEGORIES.filter(cat => cat.key !== 'flagged' || (docCounts.flagged || 0) > 0).map(cat => (
                     <button
                         key={cat.key}
                         className={`notes-tab ${activeTab === cat.key ? 'active' : ''}`}
@@ -188,9 +188,10 @@ export default function FilingPage() {
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                 minWidth: '18px', height: '18px', borderRadius: '9px',
                                 fontSize: '0.65rem', fontWeight: 700, padding: '0 5px',
-                                background: 'var(--bg-elevated)',
-                                color: 'var(--text-muted)',
+                                background: cat.key === 'flagged' ? '#f59e0b' : 'var(--bg-elevated)',
+                                color: cat.key === 'flagged' ? '#fff' : 'var(--text-muted)',
                                 marginLeft: '4px',
+                                animation: cat.key === 'flagged' ? 'pulse-badge 2s ease-in-out infinite' : 'none',
                             }}>
                                 {docCounts[cat.key]}
                             </span>

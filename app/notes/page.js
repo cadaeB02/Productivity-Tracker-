@@ -263,7 +263,7 @@ export default function NotesPage() {
 
             {/* Tab Bar */}
             <div className="notes-tabs">
-                {CATEGORIES.map(cat => (
+                {CATEGORIES.filter(cat => cat.key !== 'flagged' || (noteCounts.flagged || 0) > 0).map(cat => (
                     <button
                         key={cat.key}
                         className={`notes-tab ${activeTab === cat.key ? 'active' : ''}`}
