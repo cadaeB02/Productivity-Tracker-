@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction } from '@/lib/store';
+import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions } from '@/lib/store';
 
 const EXPENSE_CATEGORIES = ['Operations', 'Software', 'Marketing', 'Legal', 'Payroll', 'Supplies', 'Travel', 'Other'];
 const REVENUE_CATEGORIES = ['Services', 'Product Sales', 'Consulting', 'Contract', 'Recurring', 'Other'];
@@ -22,6 +22,7 @@ export default function TreasuryPage() {
     const { activeCompanyId, activeCompany } = useCompany();
     const [companies, setCompanies] = useState([]);
     const [transactions, setTransactions] = useState([]);
+    const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -36,13 +37,20 @@ export default function TreasuryPage() {
 
     const loadData = useCallback(async () => {
         try {
-            const [comps, txns] = await Promise.all([
+            const [comps, txns, allSessions] = await Promise.all([
                 getCompanies(),
                 getTransactions(activeCompanyId ? { companyId: activeCompanyId } : {}),
+                getSessions(),
             ]);
             comps.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
             setCompanies(comps);
             setTransactions(txns);
+            // Filter sessions by company if needed
+            if (activeCompanyId) {
+                setSessions(allSessions.filter(s => s.company_id === activeCompanyId));
+            } else {
+                setSessions(allSessions);
+            }
         } catch (err) {
             console.error('Failed to load treasury data', err);
         }
@@ -125,6 +133,11 @@ export default function TreasuryPage() {
     const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
     const netIncome = totalRevenue - totalExpenses;
 
+    // ROFT calculation — Return on Founder Time
+    const totalSessionSeconds = sessions.reduce((s, sess) => s + (sess.duration || 0), 0);
+    const totalHours = totalSessionSeconds / 3600;
+    const roft = totalHours > 0 ? totalRevenue / totalHours : 0;
+
     const categories = form.type === 'revenue' ? REVENUE_CATEGORIES : EXPENSE_CATEGORIES;
 
     if (loading) {
@@ -151,7 +164,7 @@ export default function TreasuryPage() {
                     </div>
                 </div>
 
-                {/* P&L Summary */}
+                {/* P&L Summary + ROFT */}
                 <div className="stats-grid" style={{ marginBottom: '24px' }}>
                     <div className="stat-card">
                         <div className="stat-label">Revenue</div>
@@ -165,6 +178,15 @@ export default function TreasuryPage() {
                         <div className="stat-label">Net Income</div>
                         <div className="stat-value" style={{ color: netIncome >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
                             {formatCurrency(netIncome)}
+                        </div>
+                    </div>
+                    <div className="stat-card roft-card">
+                        <div className="stat-label"><Icon name="timer" size={12} className="icon-inline" /> ROFT</div>
+                        <div className="stat-value" style={{ color: 'var(--color-accent)' }}>
+                            {totalHours > 0 ? `${formatCurrency(roft)}/hr` : '—'}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {totalHours > 0 ? `${Math.round(totalHours * 10) / 10}h tracked` : 'No hours logged'}
                         </div>
                     </div>
                 </div>

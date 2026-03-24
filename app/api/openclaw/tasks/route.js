@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// Shared auth helper for all OpenClaw routes
 function getAdminClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -14,17 +13,13 @@ function getAdminClient() {
 function verifyServerKey(request) {
     const serverKey = process.env.OPENCLAW_SERVER_KEY;
     if (!serverKey) return { error: 'OPENCLAW_SERVER_KEY not configured', status: 500 };
-
     const auth = request.headers.get('authorization');
     if (!auth || !auth.startsWith('Bearer ')) return { error: 'Missing authorization header', status: 401 };
-
-    const token = auth.replace('Bearer ', '').trim();
-    if (token !== serverKey) return { error: 'Invalid server key', status: 403 };
-
-    return null; // auth passed
+    if (auth.replace('Bearer ', '').trim() !== serverKey) return { error: 'Invalid server key', status: 403 };
+    return null;
 }
 
-// GET /api/openclaw/tasks — returns today's tasks with project and company info
+// GET /api/openclaw/tasks — returns today's tasks with session info
 export async function GET(request) {
     const authError = verifyServerKey(request);
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });
@@ -33,38 +28,27 @@ export async function GET(request) {
     if (!admin) return NextResponse.json({ error: 'Server not configured' }, { status: 500 });
 
     try {
-        // Get today's date range
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        // Fetch tasks — all active tasks
         const { data: tasks, error: taskError } = await admin
             .from('tasks')
             .select('id, name, company_id, project_id, created_at')
             .order('created_at', { ascending: false });
-
         if (taskError) throw taskError;
 
-        // Fetch today's sessions to see what's been worked on
-        const { data: sessions, error: sessError } = await admin
+        const { data: sessions } = await admin
             .from('sessions')
-            .select('task_id, duration, start_time, end_time')
+            .select('task_id, duration, start_time')
             .gte('start_time', today.toISOString())
             .lt('start_time', tomorrow.toISOString());
 
-        if (sessError) throw sessError;
-
-        // Fetch companies for context
-        const { data: companies } = await admin
-            .from('companies')
-            .select('id, name, color');
-
+        const { data: companies } = await admin.from('companies').select('id, name');
         const companyMap = {};
         (companies || []).forEach(c => { companyMap[c.id] = c.name; });
 
-        // Attach session data to tasks
         const sessionsByTask = {};
         (sessions || []).forEach(s => {
             if (!sessionsByTask[s.task_id]) sessionsByTask[s.task_id] = { total_seconds: 0, session_count: 0 };
@@ -90,5 +74,43 @@ export async function GET(request) {
     } catch (err) {
         console.error('OpenClaw tasks error:', err);
         return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
+    }
+}
+
+// POST /api/openclaw/tasks — create a new task
+export async function POST(request) {
+    const authError = verifyServerKey(request);
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });
+
+    const admin = getAdminClient();
+    if (!admin) return NextResponse.json({ error: 'Server not configured' }, { status: 500 });
+
+    try {
+        const body = await request.json();
+        const { name, project_id, company_id } = body;
+
+        if (!name || !project_id || !company_id) {
+            return NextResponse.json({ error: 'name, project_id, and company_id are required' }, { status: 400 });
+        }
+
+        const { data: company } = await admin
+            .from('companies')
+            .select('user_id')
+            .eq('id', company_id)
+            .single();
+
+        if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+
+        const { data, error } = await admin
+            .from('tasks')
+            .insert({ name, project_id, company_id, user_id: company.user_id })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return NextResponse.json({ success: true, task: data }, { status: 201 });
+    } catch (err) {
+        console.error('OpenClaw create task error:', err);
+        return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
     }
 }
