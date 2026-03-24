@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { useCompany } from '@/components/CompanyContext';
@@ -27,12 +27,44 @@ export default function Sidebar() {
     const { companies, activeCompanyId, activeCompany, setActiveCompanyId, setShowSwitcher } = useCompany();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [navBadges, setNavBadges] = useState({});
+
+    // Load flagged counts for sidebar dots
+    useEffect(() => {
+        const loadBadges = async () => {
+            if (!user) return;
+            try {
+                const supabase = createClient();
+                // Count flagged notes
+                const { data: flaggedNotes } = await supabase
+                    .from('notes')
+                    .select('id')
+                    .eq('flagged', true);
+                // Count flagged documents
+                const { data: flaggedDocs } = await supabase
+                    .from('documents')
+                    .select('id')
+                    .eq('flagged', true);
+
+                const badges = {};
+                if (flaggedNotes?.length) badges['/notes'] = flaggedNotes.length;
+                if (flaggedDocs?.length) badges['/filing'] = flaggedDocs.length;
+                setNavBadges(badges);
+            } catch (err) {
+                // Silently fail — badges are non-critical
+            }
+        };
+        loadBadges();
+        const interval = setInterval(loadBadges, 30000); // refresh every 30s
+        return () => clearInterval(interval);
+    }, [user, pathname]);
 
     const handleLogout = async () => {
         const supabase = createClient();
         await supabase.auth.signOut();
         window.location.href = '/login';
     };
+
 
     const initials = user?.email
         ? user.email.substring(0, 2).toUpperCase()
@@ -128,9 +160,22 @@ export default function Sidebar() {
                             href={item.href}
                             className={`nav-link ${pathname === item.href ? 'active' : ''}`}
                             onClick={() => setMobileOpen(false)}
+                            style={{ position: 'relative' }}
                         >
                             <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
                             {item.label}
+                            {navBadges[item.href] > 0 && (
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    minWidth: '16px', height: '16px', borderRadius: '8px',
+                                    fontSize: '0.6rem', fontWeight: 700, padding: '0 4px',
+                                    background: '#f59e0b', color: '#fff',
+                                    marginLeft: 'auto',
+                                    animation: 'pulse-badge 2s ease-in-out infinite',
+                                }}>
+                                    {navBadges[item.href]}
+                                </span>
+                            )}
                         </Link>
                     ))}
                 </nav>

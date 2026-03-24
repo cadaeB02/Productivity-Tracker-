@@ -8,6 +8,7 @@ import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, g
 
 const DOC_CATEGORIES = [
     { key: 'all', label: 'All Files', icon: 'folder' },
+    { key: 'flagged', label: 'Flagged', icon: 'flag-filled' },
     { key: 'agreement', label: 'Agreements', icon: 'clipboard' },
     { key: 'legal', label: 'Legal', icon: 'shield' },
     { key: 'tax', label: 'Tax', icon: 'dollar' },
@@ -52,12 +53,13 @@ export default function FilingPage() {
         try {
             const filters = {};
             if (activeCompanyId) filters.companyId = activeCompanyId;
-            if (activeTab !== 'all') filters.category = activeTab;
+            if (activeTab !== 'all' && activeTab !== 'flagged') filters.category = activeTab;
             const [docs, comps] = await Promise.all([
                 getDocuments(filters),
                 getCompanies(),
             ]);
-            setDocuments(docs);
+            const filteredDocs = activeTab === 'flagged' ? docs.filter(d => d.flagged) : docs;
+            setDocuments(filteredDocs);
             comps.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
             setCompanies(comps);
         } catch (err) {
@@ -71,8 +73,8 @@ export default function FilingPage() {
             const filters = {};
             if (activeCompanyId) filters.companyId = activeCompanyId;
             const allDocs = await getDocuments(filters);
-            const counts = { all: allDocs.length };
-            DOC_CATEGORIES.filter(c => c.key !== 'all').forEach(cat => {
+            const counts = { all: allDocs.length, flagged: allDocs.filter(d => d.flagged).length };
+            DOC_CATEGORIES.filter(c => c.key !== 'all' && c.key !== 'flagged').forEach(cat => {
                 counts[cat.key] = allDocs.filter(d => d.category === cat.key).length;
             });
             setDocCounts(counts);

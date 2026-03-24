@@ -9,6 +9,7 @@ import { encryptContent, decryptContent, hasVaultPassword, setVaultPasswordHash,
 
 const CATEGORIES = [
     { key: 'inbox', label: 'Inbox', icon: 'inbox' },
+    { key: 'flagged', label: 'Flagged', icon: 'flag-filled' },
     { key: 'todo', label: 'To-Do', icon: 'clipboard' },
     { key: 'ideas', label: 'Ideas', icon: 'zap' },
     { key: 'passwords', label: 'Passwords', icon: 'lock' },
@@ -49,14 +50,15 @@ export default function NotesPage() {
     const loadNotes = useCallback(async () => {
         try {
             const filters = {};
-            if (activeTab) filters.category = activeTab;
+            if (activeTab && activeTab !== 'flagged') filters.category = activeTab;
             if (activeCompanyId) filters.companyId = activeCompanyId;
             if (searchQuery.trim()) {
                 filters.search = searchQuery.trim();
                 delete filters.category; // search across all categories
             }
             const data = await getNotes(filters);
-            setNotes(data);
+            const filteredData = activeTab === 'flagged' ? data.filter(n => n.flagged) : data;
+            setNotes(filteredData);
         } catch (err) {
             console.error('Failed to load notes', err);
         }
@@ -66,12 +68,16 @@ export default function NotesPage() {
     const loadCounts = useCallback(async () => {
         try {
             const counts = {};
+            let flaggedCount = 0;
             for (const cat of CATEGORIES) {
+                if (cat.key === 'flagged') continue;
                 const filters = { category: cat.key };
                 if (activeCompanyId) filters.companyId = activeCompanyId;
                 const data = await getNotes(filters);
                 counts[cat.key] = data.length;
+                flaggedCount += data.filter(n => n.flagged).length;
             }
+            counts.flagged = flaggedCount;
             setNoteCounts(counts);
         } catch (err) {
             console.error('Failed to load counts', err);
@@ -270,10 +276,10 @@ export default function NotesPage() {
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                 minWidth: '18px', height: '18px', borderRadius: '9px',
                                 fontSize: '0.65rem', fontWeight: 700, padding: '0 5px',
-                                background: cat.key === 'inbox' ? 'var(--color-accent)' : 'var(--bg-elevated)',
-                                color: cat.key === 'inbox' ? '#fff' : 'var(--text-muted)',
+                                background: cat.key === 'inbox' ? 'var(--color-accent)' : cat.key === 'flagged' ? '#f59e0b' : 'var(--bg-elevated)',
+                                color: (cat.key === 'inbox' || cat.key === 'flagged') ? '#fff' : 'var(--text-muted)',
                                 marginLeft: '4px',
-                                animation: cat.key === 'inbox' ? 'pulse-badge 2s ease-in-out infinite' : 'none',
+                                animation: (cat.key === 'inbox' || cat.key === 'flagged') ? 'pulse-badge 2s ease-in-out infinite' : 'none',
                             }}>
                                 {noteCounts[cat.key]}
                             </span>
