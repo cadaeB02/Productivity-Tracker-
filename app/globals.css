@@ -221,6 +221,12 @@ select {
   margin-left: var(--sidebar-width);
   padding: 32px 40px;
   max-width: 1200px;
+  animation: fadeInContent 0.2s ease-out;
+}
+
+@keyframes fadeInContent {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 768px) {
