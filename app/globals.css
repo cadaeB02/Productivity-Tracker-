@@ -2639,7 +2639,7 @@ textarea.input {
 .day-timeline {
   position: relative;
   width: max(100%, 1200px);
-  height: 100px;
+  min-height: 62px;
   background: var(--bg-input);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
@@ -2707,8 +2707,6 @@ textarea.input {
 /* Timeline blocks */
 .timeline-block {
   position: absolute;
-  top: 18px;
-  height: 58px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
