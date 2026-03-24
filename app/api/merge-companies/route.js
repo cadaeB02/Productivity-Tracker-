@@ -104,6 +104,33 @@ export async function POST(request) {
                 .select('id');
             if (movedNotes) results.notes += movedNotes.length;
 
+            // Move equity holders to parent
+            const { data: movedEquity } = await supabase
+                .from('equity_holders')
+                .update({ company_id: parentId })
+                .eq('company_id', childId)
+                .eq('user_id', user.id)
+                .select('id');
+            if (movedEquity) results.equity = (results.equity || 0) + movedEquity.length;
+
+            // Move equity transfers to parent
+            const { data: movedTransfers } = await supabase
+                .from('equity_transfers')
+                .update({ company_id: parentId })
+                .eq('company_id', childId)
+                .eq('user_id', user.id)
+                .select('id');
+            if (movedTransfers) results.transfers = (results.transfers || 0) + movedTransfers.length;
+
+            // Move documents to parent
+            const { data: movedDocs } = await supabase
+                .from('documents')
+                .update({ company_id: parentId })
+                .eq('company_id', childId)
+                .eq('user_id', user.id)
+                .select('id');
+            if (movedDocs) results.documents = (results.documents || 0) + movedDocs.length;
+
             // Delete the empty child company
             await supabase
                 .from('companies')
