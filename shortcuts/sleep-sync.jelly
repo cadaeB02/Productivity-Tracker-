@@ -1,0 +1,80 @@
+// ============================================
+// Sleep Sync — Productivity Tracker
+// Paste this into Jellycuts on your iPhone
+// ============================================
+// 
+// WHAT THIS DOES:
+// 1. Pulls your sleep data from Apple Health
+// 2. Collects all sleep phases (Deep, Core, REM, Awake)
+// 3. Sends everything to your Productivity Tracker
+// 4. Falls back to manual entry if no Health data
+//
+// NOTE: If "Find Health Samples" shows as unknown after
+// compiling, you'll need to add that ONE action manually 
+// in the Shortcuts app. Everything else will be wired up.
+// ============================================
+
+import Shortcuts
+
+// --- CONFIG ---
+var token = "o1bRDiGe0R8d858Y5Bm4HLzktgQ8KWGDlzjYMXgPzsyM2bUp"
+var apiURL = "https://productivitytrackermvp.vercel.app/api/sleep-sync"
+
+// ============================================
+// STEP 1: Find In Bed sample (full night)
+// ============================================
+filterHealth(sampleType: "Sleep", startDate: "Start Date is in the last 1 day", limit: 1, sortBy: "Start Date", order: "Latest First") -> mv:sleepSamples
+
+// ============================================
+// STEP 2: Check if we got data
+// ============================================
+if(mv:sleepSamples.hasValue) {
+
+    // --- Get bedtime (Start Date) ---
+    sampleDetail(detail: "Start Date", sample: mv:sleepSamples) -> mv:bedtimeRaw
+    formatDate(date: mv:bedtimeRaw, formatStyle: "Custom", customFormat: "HH:mm") -> mv:sleepTime
+
+    // --- Get wake time (End Date) ---
+    sampleDetail(detail: "End Date", sample: mv:sleepSamples) -> mv:waketimeRaw
+    formatDate(date: mv:waketimeRaw, formatStyle: "Custom", customFormat: "HH:mm") -> mv:wakeTime
+
+    // --- Get the date string ---
+    formatDate(date: mv:waketimeRaw, formatStyle: "Custom", customFormat: "yyyy-MM-dd") -> mv:dateStr
+
+    // --- Calculate total duration ---
+    sampleDetail(detail: "Duration", sample: mv:sleepSamples) -> mv:totalDuration
+
+    // ============================================
+    // STEP 3: POST to API (auto)
+    // ============================================
+    downloadURL(url: apiURL, method: "POST", headers: {"Content-Type": "application/json"}, body: {"token": token, "date": mv:dateStr, "sleep_time": mv:sleepTime, "wake_time": mv:wakeTime}) -> mv:response
+
+    // ============================================
+    // STEP 4: Notify
+    // ============================================
+    notification(title: "Sleep Synced ✓", body: "Slept ${mv:sleepTime} → Woke ${mv:wakeTime}")
+
+} else {
+
+    // ============================================
+    // MANUAL FALLBACK
+    // ============================================
+
+    // Ask for bedtime
+    askForInput(prompt: "What time did you go to sleep?", type: "Time") -> mv:manualBedtime
+    formatDate(date: mv:manualBedtime, formatStyle: "Custom", customFormat: "HH:mm") -> mv:manualSleepTime
+
+    // Ask for wake time
+    askForInput(prompt: "What time did you wake up?", type: "Time") -> mv:manualWaketime
+    formatDate(date: mv:manualWaketime, formatStyle: "Custom", customFormat: "HH:mm") -> mv:manualWakeTime
+
+    // Get today's date
+    getCurrentDate() -> mv:today
+    formatDate(date: mv:today, formatStyle: "Custom", customFormat: "yyyy-MM-dd") -> mv:manualDate
+
+    // POST manual data
+    downloadURL(url: apiURL, method: "POST", headers: {"Content-Type": "application/json"}, body: {"token": token, "date": mv:manualDate, "sleep_time": mv:manualSleepTime, "wake_time": mv:manualWakeTime}) -> mv:manualResponse
+
+    // Notify
+    notification(title: "Sleep Synced (Manual) ✓", body: "Slept ${mv:manualSleepTime} → Woke ${mv:manualWakeTime}")
+}

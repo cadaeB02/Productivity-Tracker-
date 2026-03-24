@@ -11,7 +11,6 @@ const NAV_ITEMS = [
     { href: '/', label: 'Timer', icon: 'timer' },
     { href: '/projects', label: 'Projects', icon: 'folder' },
     { href: '/schedule', label: 'Schedule', icon: 'calendar' },
-    { href: '/sleep', label: 'Sleep', icon: 'moon' },
     { href: '/history', label: 'History', icon: 'clipboard' },
     { href: '/stats', label: 'Stats', icon: 'chart' },
     { href: '/agent', label: 'AI Agent', icon: 'robot' },
