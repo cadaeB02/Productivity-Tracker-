@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, getCompanies } from '@/lib/store';
+import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, getCompanies, toggleDocumentFlag } from '@/lib/store';
 
 const DOC_CATEGORIES = [
     { key: 'all', label: 'All Files', icon: 'folder' },
@@ -46,6 +46,7 @@ export default function FilingPage() {
     const [showUpload, setShowUpload] = useState(false);
     const [uploadForm, setUploadForm] = useState({ category: 'general', description: '', company_id: '' });
     const fileInputRef = useRef(null);
+    const [docCounts, setDocCounts] = useState({});
 
     const loadDocs = useCallback(async () => {
         try {
@@ -65,10 +66,26 @@ export default function FilingPage() {
         setLoading(false);
     }, [activeCompanyId, activeTab]);
 
+    const loadCounts = useCallback(async () => {
+        try {
+            const filters = {};
+            if (activeCompanyId) filters.companyId = activeCompanyId;
+            const allDocs = await getDocuments(filters);
+            const counts = { all: allDocs.length };
+            DOC_CATEGORIES.filter(c => c.key !== 'all').forEach(cat => {
+                counts[cat.key] = allDocs.filter(d => d.category === cat.key).length;
+            });
+            setDocCounts(counts);
+        } catch (err) {
+            console.error('Failed to load doc counts', err);
+        }
+    }, [activeCompanyId]);
+
     useEffect(() => {
         setLoading(true);
         loadDocs();
-    }, [loadDocs]);
+        loadCounts();
+    }, [loadDocs, loadCounts]);
 
     const handleUpload = async (e) => {
         e.preventDefault();
@@ -111,8 +128,19 @@ export default function FilingPage() {
         try {
             await deleteDocument(doc.id);
             loadDocs();
+            loadCounts();
         } catch (err) {
             console.error('Delete failed:', err);
+        }
+    };
+
+    const handleFlag = async (doc) => {
+        try {
+            await toggleDocumentFlag(doc.id, doc.flagged);
+            loadDocs();
+            loadCounts();
+        } catch (err) {
+            console.error('Flag failed:', err);
         }
     };
 
@@ -153,6 +181,18 @@ export default function FilingPage() {
                     >
                         <Icon name={cat.icon} size={14} />
                         <span>{cat.label}</span>
+                        {(docCounts[cat.key] || 0) > 0 && (
+                            <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                minWidth: '18px', height: '18px', borderRadius: '9px',
+                                fontSize: '0.65rem', fontWeight: 700, padding: '0 5px',
+                                background: 'var(--bg-elevated)',
+                                color: 'var(--text-muted)',
+                                marginLeft: '4px',
+                            }}>
+                                {docCounts[cat.key]}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -263,6 +303,14 @@ export default function FilingPage() {
                                     <span className="filing-size">{formatFileSize(doc.file_size)}</span>
                                 </div>
                                 <div className="filing-row-actions">
+                                    <button
+                                        className="btn-icon"
+                                        onClick={() => handleFlag(doc)}
+                                        title={doc.flagged ? 'Unflag' : 'Flag for review'}
+                                        style={{ color: doc.flagged ? '#f59e0b' : undefined }}
+                                    >
+                                        <Icon name={doc.flagged ? 'flag-filled' : 'flag'} size={14} />
+                                    </button>
                                     <button className="btn-icon" onClick={() => handleDownload(doc)} title="Download">
                                         <Icon name="download" size={14} />
                                     </button>

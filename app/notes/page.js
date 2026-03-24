@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getNotes, addNote, updateNote, deleteNote, toggleNotePin } from '@/lib/store';
+import { getNotes, addNote, updateNote, deleteNote, toggleNotePin, toggleNoteFlag } from '@/lib/store';
 import { encryptContent, decryptContent, hasVaultPassword, setVaultPasswordHash, verifyVaultPassword } from '@/lib/vault';
 
 const CATEGORIES = [
@@ -154,6 +154,16 @@ export default function NotesPage() {
             loadNotes();
         } catch (err) {
             console.error('Failed to toggle pin', err);
+        }
+    };
+
+    const handleFlag = async (note) => {
+        try {
+            await toggleNoteFlag(note.id, note.flagged);
+            loadNotes();
+            loadCounts();
+        } catch (err) {
+            console.error('Failed to toggle flag', err);
         }
     };
 
@@ -401,6 +411,14 @@ export default function NotesPage() {
                                         )}
                                         <button className="btn-icon" onClick={() => handlePin(note)} title={note.pinned ? 'Unpin' : 'Pin'}>
                                             <Icon name="bookmark" size={14} />
+                                        </button>
+                                        <button
+                                            className="btn-icon"
+                                            onClick={() => handleFlag(note)}
+                                            title={note.flagged ? 'Unflag' : 'Flag for review'}
+                                            style={{ color: note.flagged ? '#f59e0b' : undefined }}
+                                        >
+                                            <Icon name={note.flagged ? 'flag-filled' : 'flag'} size={14} />
                                         </button>
                                         {activeTab === 'inbox' && (
                                             <select

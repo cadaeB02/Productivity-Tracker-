@@ -385,6 +385,12 @@ const ICONS = {
     bookmark: (
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
     ),
+    flag: (
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+    ),
+    'flag-filled': (
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" fill="currentColor" />
+    ),
     lock: (
         <>
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
