@@ -975,6 +975,85 @@ select {
   border-radius: var(--radius-md);
 }
 
+/* ==================== FILING CABINET ==================== */
+
+.filing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filing-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.filing-row:hover {
+  border-color: var(--border-default);
+}
+
+.filing-row-icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.filing-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.filing-row-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filing-row-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.filing-row-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.filing-category-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+}
+
+.filing-size {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  min-width: 50px;
+  text-align: right;
+}
+
+.filing-row-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 /* ==================== NOTES HUB ==================== */
 
 .notes-tabs {
