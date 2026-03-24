@@ -35,28 +35,32 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
 
-        // Parse date — use today if not provided
-        const now = new Date();
+        // Parse date — use today in US Mountain Time if not provided
         let dateStr = body.date;
         if (!dateStr) {
-            dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            // Get current date in Mountain Time (UTC-6 / UTC-7 depending on DST)
+            const now = new Date();
+            const mtDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Denver' }));
+            dateStr = `${mtDate.getFullYear()}-${String(mtDate.getMonth() + 1).padStart(2, '0')}-${String(mtDate.getDate()).padStart(2, '0')}`;
         }
 
-        // Build ISO timestamps
+        const source = body.source || 'ios_shortcut';
+
+        // Build ISO timestamps — keep times in the local date context
         let wakeISO, sleepISO;
 
         if (body.wake_iso) {
             wakeISO = body.wake_iso;
         } else if (body.wake_time) {
-            wakeISO = new Date(`${dateStr}T${body.wake_time}:00`).toISOString();
+            // Treat as Mountain Time: append -06:00 offset so it doesn't shift dates
+            wakeISO = `${dateStr}T${body.wake_time}:00-06:00`;
         }
 
         if (body.sleep_iso) {
             sleepISO = body.sleep_iso;
         } else if (body.sleep_time) {
-            // Sleep time is usually the night before, so use previous day if sleep > wake
             const sleepDate = body.sleep_date || dateStr;
-            sleepISO = new Date(`${sleepDate}T${body.sleep_time}:00`).toISOString();
+            sleepISO = `${sleepDate}T${body.sleep_time}:00-06:00`;
         }
 
         if (!wakeISO && !sleepISO) {
@@ -73,7 +77,7 @@ export async function POST(request) {
 
         let result;
         if (existing) {
-            const updates = {};
+            const updates = { source };
             if (wakeISO) updates.wake_time = wakeISO;
             if (sleepISO) updates.sleep_time = sleepISO;
             const { data, error } = await admin
@@ -91,13 +95,14 @@ export async function POST(request) {
                     date: dateStr,
                     wake_time: wakeISO,
                     sleep_time: sleepISO,
+                    source,
                 })
                 .select()
                 .single();
             result = error ? { error: error.message } : { status: 'created', id: data.id };
         }
 
-        return NextResponse.json({ success: true, date: dateStr, ...result });
+        return NextResponse.json({ success: true, date: dateStr, source, ...result });
     } catch (err) {
         console.error('Sleep sync error:', err);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
