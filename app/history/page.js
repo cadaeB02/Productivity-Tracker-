@@ -74,7 +74,7 @@ export default function HistoryPage() {
         await addManualSession(
             manualTask,
             task?.project_id || manualProject,
-            task?.company_id || manualCompany,
+            manualCompany || task?.company_id,
             manualDate,
             durationSeconds,
             manualSummary
