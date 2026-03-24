@@ -707,44 +707,8 @@ export default function SchedulePage() {
                         </div>
                     )}
 
-                    {/* ===== COMPACT TIMELINE STRIP ===== */}
-                    <div className="day-timeline-container" ref={timelineRef}>
-                        <div className="day-timeline compact-strip">
-                            {/* Hour markers — every 3 hours for compact view */}
-                            {[0, 3, 6, 9, 12, 15, 18, 21].map(h => (
-                                <div key={h} className="timeline-hour" style={{ left: `${(h / 24) * 100}%` }}>
-                                    <span className="timeline-hour-label">{formatHour(h)}</span>
-                                    <div className="timeline-hour-line" />
-                                </div>
-                            ))}
 
-                            {/* Timeline blocks — no labels, just colored bars */}
-                            {timelineData.timelineBlocks.map(item => {
-                                const left = (item.startMins / 1440) * 100;
-                                const width = ((item.endMins - item.startMins) / 1440) * 100;
-                                const isSleep = item.type === 'sleep';
-                                const isPlanned = item.type === 'planned' || item.type === 'task';
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className={`timeline-block ${isSleep ? 'sleep-block' : ''} ${isPlanned ? 'planned' : ''} ${item.type === 'actual' ? 'actual' : ''}`}
-                                        style={{
-                                            left: `${left}%`,
-                                            width: `${Math.max(width, 0.4)}%`,
-                                            top: '14px',
-                                            height: '24px',
-                                            backgroundColor: isSleep ? '#1e1b4b' : (isPlanned ? 'transparent' : item.color),
-                                            borderColor: isPlanned ? item.color : undefined,
-                                            '--block-color': isPlanned ? item.color : undefined,
-                                            opacity: isSleep ? 0.5 : 0.9,
-                                            zIndex: isSleep ? 1 : 2,
-                                        }}
-                                        title={`${item.label}: ${minutesToTime(item.startMins)} → ${minutesToTime(item.endMins)}`}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </div>
+
 
                     {/* ===== FILTER CHIPS ===== */}
                     {timelineData.companies.length > 1 && (
