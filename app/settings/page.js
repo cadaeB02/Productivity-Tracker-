@@ -53,11 +53,18 @@ export default function SettingsPage() {
     const [merging, setMerging] = useState(false);
     const [mergeResult, setMergeResult] = useState(null);
 
+    // Troubleshooting
+    const [orphanedSessions, setOrphanedSessions] = useState([]);
+    const [orphanTarget, setOrphanTarget] = useState('');
+    const [orphanFixing, setOrphanFixing] = useState(false);
+    const [orphanResult, setOrphanResult] = useState(null);
+
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadSettings();
         loadCompaniesForMerge();
+        loadOrphanedSessions();
     }, []);
 
     const loadCompaniesForMerge = async () => {
@@ -68,6 +75,40 @@ export default function SettingsPage() {
         } catch (err) {
             console.error('Failed to load companies for merge', err);
         }
+    };
+
+    const loadOrphanedSessions = async () => {
+        try {
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('sessions')
+                .select('id, start_time, end_time, duration, summary')
+                .is('company_id', null)
+                .not('end_time', 'is', null)
+                .order('start_time', { ascending: false });
+            setOrphanedSessions(data || []);
+        } catch (err) {
+            console.error('Failed to load orphaned sessions', err);
+        }
+    };
+
+    const fixOrphanedSessions = async () => {
+        if (!orphanTarget) return;
+        setOrphanFixing(true);
+        try {
+            const supabase = createClient();
+            const ids = orphanedSessions.map(s => s.id);
+            const { error } = await supabase
+                .from('sessions')
+                .update({ company_id: orphanTarget })
+                .in('id', ids);
+            if (error) throw error;
+            setOrphanResult(`Reassigned ${ids.length} sessions successfully.`);
+            setOrphanedSessions([]);
+        } catch (err) {
+            alert('Failed to fix sessions: ' + err.message);
+        }
+        setOrphanFixing(false);
     };
 
     const loadSettings = async () => {
@@ -651,6 +692,79 @@ export default function SettingsPage() {
                     >
                         <Icon name="folder" size={14} /> {merging ? 'Merging...' : 'Merge Companies'}
                     </button>
+                </div>
+            </div>
+
+            {/* Troubleshooting */}
+            <div className="settings-section">
+                <h3><Icon name="shield" size={18} className="icon-inline" /> Troubleshooting</h3>
+                <div className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Orphaned Sessions</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                Sessions that lost their company link (e.g. after a merge)
+                            </div>
+                        </div>
+                        {orphanedSessions.length > 0 && (
+                            <span style={{
+                                background: 'var(--color-danger)',
+                                color: '#fff',
+                                borderRadius: '12px',
+                                padding: '2px 10px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                            }}>
+                                {orphanedSessions.length} found
+                            </span>
+                        )}
+                    </div>
+
+                    {orphanedSessions.length > 0 ? (
+                        <>
+                            <div style={{ background: 'var(--bg-elevated)', padding: '10px 14px', borderRadius: 'var(--radius-md)', marginBottom: '12px', fontSize: '0.82rem' }}>
+                                <strong>{orphanedSessions.length}</strong> sessions with <strong>
+                                    {(() => {
+                                        const totalSec = orphanedSessions.reduce((s, o) => s + (o.duration || 0), 0);
+                                        const hrs = Math.floor(totalSec / 3600);
+                                        const mins = Math.floor((totalSec % 3600) / 60);
+                                        return `${hrs}h ${mins}m`;
+                                    })()}
+                                </strong> of tracked time have no company assigned.
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <select
+                                    className="input"
+                                    style={{ flex: 1, padding: '6px 10px', fontSize: '0.82rem' }}
+                                    value={orphanTarget}
+                                    onChange={(e) => setOrphanTarget(e.target.value)}
+                                >
+                                    <option value="">Assign all to...</option>
+                                    {mergeCompanies.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    className="btn btn-primary btn-sm"
+                                    disabled={!orphanTarget || orphanFixing}
+                                    onClick={() => {
+                                        if (!confirm(`Reassign ${orphanedSessions.length} orphaned sessions to ${mergeCompanies.find(c => c.id === orphanTarget)?.name}?`)) return;
+                                        fixOrphanedSessions();
+                                    }}
+                                >
+                                    <Icon name="zap" size={12} /> {orphanFixing ? 'Fixing...' : 'Fix'}
+                                </button>
+                            </div>
+                        </>
+                    ) : orphanResult ? (
+                        <div style={{ color: 'var(--color-success)', fontSize: '0.82rem' }}>
+                            {orphanResult}
+                        </div>
+                    ) : (
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                            No orphaned sessions found. All sessions are linked to a company.
+                        </div>
+                    )}
                 </div>
             </div>
 
