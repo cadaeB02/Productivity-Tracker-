@@ -2,8 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 // POST /api/sleep-sync — receive sleep data from iOS Shortcut
-// Body: { token: "agent-token", date: "2026-03-23", wake_time: "06:30", sleep_time: "22:15" }
-// Or: { token: "agent-token", wake_iso: "2026-03-23T06:30:00Z", sleep_iso: "2026-03-22T22:15:00Z" }
+// Body options:
+// Simple: { token, date, wake_time: "06:30", sleep_time: "22:15" }
+// With phases: { token, date, wake_time, sleep_time, rem_mins, core_mins, deep_mins, awake_mins }
+// ISO: { token, wake_iso, sleep_iso, rem_mins, core_mins, deep_mins, awake_mins }
 export async function POST(request) {
     try {
         const body = await request.json();
@@ -35,10 +37,9 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
 
-        // Parse date — use today in US Mountain Time if not provided
+        // Parse date — use today in Mountain Time if not provided
         let dateStr = body.date;
         if (!dateStr) {
-            // Get current date in Mountain Time (UTC-6 / UTC-7 depending on DST)
             const now = new Date();
             const mtDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Denver' }));
             dateStr = `${mtDate.getFullYear()}-${String(mtDate.getMonth() + 1).padStart(2, '0')}-${String(mtDate.getDate()).padStart(2, '0')}`;
@@ -46,13 +47,12 @@ export async function POST(request) {
 
         const source = body.source || 'ios_shortcut';
 
-        // Build ISO timestamps — keep times in the local date context
+        // Build ISO timestamps — keep times in Mountain Time context
         let wakeISO, sleepISO;
 
         if (body.wake_iso) {
             wakeISO = body.wake_iso;
         } else if (body.wake_time) {
-            // Treat as Mountain Time: append -06:00 offset so it doesn't shift dates
             wakeISO = `${dateStr}T${body.wake_time}:00-06:00`;
         }
 
@@ -67,6 +67,13 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Provide wake_time/sleep_time or wake_iso/sleep_iso' }, { status: 400 });
         }
 
+        // Parse phase data
+        const remMins = parseInt(body.rem_mins) || 0;
+        const coreMins = parseInt(body.core_mins) || 0;
+        const deepMins = parseInt(body.deep_mins) || 0;
+        const awakeMins = parseInt(body.awake_mins) || 0;
+        const totalSleepMins = parseInt(body.total_sleep_mins) || (remMins + coreMins + deepMins);
+
         // Upsert sleep log
         const { data: existing } = await admin
             .from('sleep_logs')
@@ -76,13 +83,21 @@ export async function POST(request) {
             .maybeSingle();
 
         let result;
+        const record = {
+            source,
+            ...(wakeISO && { wake_time: wakeISO }),
+            ...(sleepISO && { sleep_time: sleepISO }),
+            ...(remMins > 0 && { rem_mins: remMins }),
+            ...(coreMins > 0 && { core_mins: coreMins }),
+            ...(deepMins > 0 && { deep_mins: deepMins }),
+            ...(awakeMins > 0 && { awake_mins: awakeMins }),
+            ...(totalSleepMins > 0 && { total_sleep_mins: totalSleepMins }),
+        };
+
         if (existing) {
-            const updates = { source };
-            if (wakeISO) updates.wake_time = wakeISO;
-            if (sleepISO) updates.sleep_time = sleepISO;
             const { data, error } = await admin
                 .from('sleep_logs')
-                .update(updates)
+                .update(record)
                 .eq('id', existing.id)
                 .select()
                 .single();
@@ -93,16 +108,20 @@ export async function POST(request) {
                 .insert({
                     user_id: settings.user_id,
                     date: dateStr,
-                    wake_time: wakeISO,
-                    sleep_time: sleepISO,
-                    source,
+                    ...record,
                 })
                 .select()
                 .single();
             result = error ? { error: error.message } : { status: 'created', id: data.id };
         }
 
-        return NextResponse.json({ success: true, date: dateStr, source, ...result });
+        return NextResponse.json({
+            success: true,
+            date: dateStr,
+            source,
+            phases: { rem_mins: remMins, core_mins: coreMins, deep_mins: deepMins, awake_mins: awakeMins, total_sleep_mins: totalSleepMins },
+            ...result,
+        });
     } catch (err) {
         console.error('Sleep sync error:', err);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
