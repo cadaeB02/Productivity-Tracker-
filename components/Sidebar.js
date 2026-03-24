@@ -29,35 +29,45 @@ export default function Sidebar() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [navBadges, setNavBadges] = useState({});
 
-    // Load flagged counts for sidebar dots
+    // Load flagged counts + titles for sidebar dots
     useEffect(() => {
         const loadBadges = async () => {
             if (!user) return;
             try {
                 const supabase = createClient();
-                // Count flagged notes
                 const { data: flaggedNotes } = await supabase
                     .from('notes')
-                    .select('id')
-                    .eq('flagged', true);
-                // Count flagged documents
+                    .select('id, title')
+                    .eq('flagged', true)
+                    .limit(10);
                 const { data: flaggedDocs } = await supabase
                     .from('documents')
-                    .select('id')
-                    .eq('flagged', true);
+                    .select('id, file_name')
+                    .eq('flagged', true)
+                    .limit(10);
 
                 const badges = {};
-                if (flaggedNotes?.length) badges['/notes'] = flaggedNotes.length;
-                if (flaggedDocs?.length) badges['/filing'] = flaggedDocs.length;
+                if (flaggedNotes?.length) {
+                    badges['/notes'] = {
+                        count: flaggedNotes.length,
+                        items: flaggedNotes.map(n => n.title || 'Untitled'),
+                    };
+                }
+                if (flaggedDocs?.length) {
+                    badges['/filing'] = {
+                        count: flaggedDocs.length,
+                        items: flaggedDocs.map(d => d.file_name || 'Untitled'),
+                    };
+                }
                 setNavBadges(badges);
             } catch (err) {
                 // Silently fail — badges are non-critical
             }
         };
         loadBadges();
-        const interval = setInterval(loadBadges, 30000); // refresh every 30s
+        const interval = setInterval(loadBadges, 30000);
         return () => clearInterval(interval);
-    }, [user, pathname]);
+    }, [user]);
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -164,16 +174,19 @@ export default function Sidebar() {
                         >
                             <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
                             {item.label}
-                            {navBadges[item.href] > 0 && (
-                                <span style={{
-                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                    minWidth: '16px', height: '16px', borderRadius: '8px',
-                                    fontSize: '0.6rem', fontWeight: 700, padding: '0 4px',
-                                    background: '#f59e0b', color: '#fff',
-                                    marginLeft: 'auto',
-                                    animation: 'pulse-badge 2s ease-in-out infinite',
-                                }}>
-                                    {navBadges[item.href]}
+                            {navBadges[item.href]?.count > 0 && (
+                                <span
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        minWidth: '16px', height: '16px', borderRadius: '8px',
+                                        fontSize: '0.6rem', fontWeight: 700, padding: '0 4px',
+                                        background: '#f59e0b', color: '#fff',
+                                        marginLeft: 'auto',
+                                        animation: 'pulse-badge 2s ease-in-out infinite',
+                                    }}
+                                    title={`Flagged:\n${navBadges[item.href].items.join('\n')}`}
+                                >
+                                    {navBadges[item.href].count}
                                 </span>
                             )}
                         </Link>

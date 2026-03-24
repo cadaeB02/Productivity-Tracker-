@@ -3,6 +3,7 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { CompanyProvider } from '@/components/CompanyContext';
 import CompanySwitcher from '@/components/CompanySwitcher';
+import PersistentLayout from '@/components/PersistentLayout';
 
 export const metadata = {
     title: 'HoldCo OS — Productivity Tracker',
@@ -31,7 +32,9 @@ export default function RootLayout({ children }) {
                 <ThemeProvider>
                     <AuthProvider>
                         <CompanyProvider>
-                            {children}
+                            <PersistentLayout>
+                                {children}
+                            </PersistentLayout>
                             <CompanySwitcher />
                         </CompanyProvider>
                     </AuthProvider>
