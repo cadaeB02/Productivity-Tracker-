@@ -13,6 +13,19 @@ const US_STATES = [
     'VA','WA','WV','WI','WY','DC',
 ];
 
+const COMPLIANCE_CHECKLIST = [
+    { key: 'articles', label: 'Articles of Organization', desc: 'Filed with the state to create the LLC', field: 'state_of_formation' },
+    { key: 'ein', label: 'EIN (Employer Identification Number)', desc: 'Federal tax ID from the IRS', field: 'ein' },
+    { key: 'operating_agreement', label: 'Operating Agreement', desc: 'Internal rules governing the LLC', field: null },
+    { key: 'registered_agent', label: 'Registered Agent', desc: 'Designated agent for legal documents', field: 'registered_agent' },
+    { key: 'state_renewal', label: 'Annual/Biennial State Filing', desc: 'Periodic report filed with the state', field: 'state_renewal_date' },
+    { key: 'bank_account', label: 'Business Bank Account', desc: 'Separate bank account for the LLC', field: null },
+    { key: 'accounting', label: 'Bookkeeping / Accounting', desc: 'Financial records and tax prep', field: null },
+    { key: 'insurance', label: 'Business Insurance', desc: 'General liability or professional coverage', field: null },
+    { key: 'licenses', label: 'Business Licenses & Permits', desc: 'Any required local/state licenses', field: null },
+    { key: 'tax_filings', label: 'Tax Filings (Federal & State)', desc: 'Annual tax returns filed on time', field: null },
+];
+
 function getRenewalStatus(dateStr) {
     if (!dateStr) return null;
     const today = new Date();
@@ -34,6 +47,8 @@ export default function CompliancePage() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [showEin, setShowEin] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [checklistState, setChecklistState] = useState({});
 
     // Equity
     const [equityHolders, setEquityHolders] = useState([]);
@@ -222,6 +237,7 @@ export default function CompliancePage() {
             });
 
             setSaved(true);
+            setIsEditing(false);
             setTimeout(() => setSaved(false), 2000);
             loadData();
         } catch (err) {
@@ -304,102 +320,153 @@ export default function CompliancePage() {
                         )}
 
                         <div className="card" style={{ marginBottom: '20px' }}>
-                            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Icon name="building" size={16} /> Entity Information
-                            </h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                    <Icon name="building" size={16} /> Entity Information
+                                </h3>
+                                {!isEditing && (
+                                    <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(true)}>
+                                        <Icon name="edit" size={12} /> Edit
+                                    </button>
+                                )}
+                            </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                <div className="input-group">
-                                    <label>Legal Name</label>
-                                    <input
-                                        className="input"
-                                        placeholder="e.g. GC Ventures LLC"
-                                        value={editFields.legal_name}
-                                        onChange={(e) => setField('legal_name', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label>EIN (Tax ID)</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            className="input"
-                                            type={showEin ? 'text' : 'password'}
-                                            placeholder="XX-XXXXXXX"
-                                            value={editFields.ein}
-                                            onChange={(e) => setField('ein', e.target.value)}
-                                            style={{ flex: 1 }}
-                                        />
-                                        <button className="btn btn-ghost btn-sm" onClick={() => setShowEin(!showEin)}>
-                                            <Icon name={showEin ? 'eye-off' : 'eye'} size={14} />
+                            {isEditing ? (
+                                /* ===== EDIT MODE ===== */
+                                <>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                        <div className="input-group">
+                                            <label>Legal Name</label>
+                                            <input className="input" placeholder="e.g. GC Ventures LLC" value={editFields.legal_name} onChange={(e) => setField('legal_name', e.target.value)} />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>EIN (Tax ID)</label>
+                                            <div className="flex gap-2">
+                                                <input className="input" type={showEin ? 'text' : 'password'} placeholder="XX-XXXXXXX" value={editFields.ein} onChange={(e) => setField('ein', e.target.value)} style={{ flex: 1 }} />
+                                                <button className="btn btn-ghost btn-sm" onClick={() => setShowEin(!showEin)}><Icon name={showEin ? 'eye-off' : 'eye'} size={14} /></button>
+                                            </div>
+                                        </div>
+                                        <div className="input-group">
+                                            <label>State of Formation</label>
+                                            <select className="input" value={editFields.state_of_formation} onChange={(e) => setField('state_of_formation', e.target.value)}>
+                                                <option value="">Select state...</option>
+                                                {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="input-group">
+                                            <label>Formation Date</label>
+                                            <input className="input" type="date" value={editFields.formation_date} onChange={(e) => setField('formation_date', e.target.value)} />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>State Renewal Date {renewalInfo && <span className={`compliance-badge-inline ${renewalInfo.status}`}>{renewalInfo.label}</span>}</label>
+                                            <input className="input" type="date" value={editFields.state_renewal_date} onChange={(e) => setField('state_renewal_date', e.target.value)} />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>Registered Agent</label>
+                                            <input className="input" placeholder="e.g. Northwest Registered Agent" value={editFields.registered_agent} onChange={(e) => setField('registered_agent', e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div className="input-group" style={{ marginTop: '16px' }}>
+                                        <label>Linked Domains (comma separated)</label>
+                                        <input className="input" placeholder="e.g. gcventures.com, mysite.io" value={editFields.domains} onChange={(e) => setField('domains', e.target.value)} />
+                                    </div>
+                                    <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                                            {saving ? 'Saving...' : saved ? <><Icon name="check" size={14} /> Saved!</> : <><Icon name="save" size={14} /> Save Changes</>}
+                                        </button>
+                                        <button className="btn" style={{ border: '1px solid var(--border-color)' }} onClick={() => { setIsEditing(false); loadData(); }}>
+                                            Cancel
                                         </button>
                                     </div>
+                                </>
+                            ) : (
+                                /* ===== READ-ONLY MODE ===== */
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                    <div className="compliance-card-field">
+                                        <span className="compliance-label">Legal Name</span>
+                                        <span style={{ fontWeight: 500 }}>{editFields.legal_name || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}</span>
+                                    </div>
+                                    <div className="compliance-card-field">
+                                        <span className="compliance-label">EIN (Tax ID)</span>
+                                        <span style={{ fontWeight: 500 }}>{editFields.ein ? `••••••${editFields.ein.slice(-4)}` : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}</span>
+                                    </div>
+                                    <div className="compliance-card-field">
+                                        <span className="compliance-label">State of Formation</span>
+                                        <span style={{ fontWeight: 500 }}>{editFields.state_of_formation || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}</span>
+                                    </div>
+                                    <div className="compliance-card-field">
+                                        <span className="compliance-label">Formation Date</span>
+                                        <span style={{ fontWeight: 500 }}>{editFields.formation_date ? new Date(editFields.formation_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}</span>
+                                    </div>
+                                    <div className="compliance-card-field">
+                                        <span className="compliance-label">State Renewal Date</span>
+                                        <span style={{ fontWeight: 500 }}>
+                                            {editFields.state_renewal_date ? new Date(editFields.state_renewal_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}
+                                            {renewalInfo && <span className={`compliance-badge-inline ${renewalInfo.status}`} style={{ marginLeft: '8px' }}>{renewalInfo.label}</span>}
+                                        </span>
+                                    </div>
+                                    <div className="compliance-card-field">
+                                        <span className="compliance-label">Registered Agent</span>
+                                        <span style={{ fontWeight: 500 }}>{editFields.registered_agent || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}</span>
+                                    </div>
+                                    {editFields.domains && (
+                                        <div className="compliance-card-field" style={{ gridColumn: '1 / -1' }}>
+                                            <span className="compliance-label">Linked Domains</span>
+                                            <span style={{ fontWeight: 500 }}>{editFields.domains}</span>
+                                        </div>
+                                    )}
                                 </div>
+                            )}
+                        </div>
 
-                                <div className="input-group">
-                                    <label>State of Formation</label>
-                                    <select
-                                        className="input"
-                                        value={editFields.state_of_formation}
-                                        onChange={(e) => setField('state_of_formation', e.target.value)}
-                                    >
-                                        <option value="">Select state...</option>
-                                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-
-                                <div className="input-group">
-                                    <label>Formation Date</label>
-                                    <input
-                                        className="input"
-                                        type="date"
-                                        value={editFields.formation_date}
-                                        onChange={(e) => setField('formation_date', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label>
-                                        State Renewal Date
-                                        {renewalInfo && (
-                                            <span className={`compliance-badge-inline ${renewalInfo.status}`}>
-                                                {renewalInfo.label}
-                                            </span>
-                                        )}
-                                    </label>
-                                    <input
-                                        className="input"
-                                        type="date"
-                                        value={editFields.state_renewal_date}
-                                        onChange={(e) => setField('state_renewal_date', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label>Registered Agent</label>
-                                    <input
-                                        className="input"
-                                        placeholder="e.g. Northwest Registered Agent"
-                                        value={editFields.registered_agent}
-                                        onChange={(e) => setField('registered_agent', e.target.value)}
-                                    />
-                                </div>
+                        {/* ===== COMPLIANCE CHECKLIST ===== */}
+                        <div className="card" style={{ marginBottom: '20px' }}>
+                            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Icon name="clipboard" size={16} /> LLC Compliance Checklist
+                            </h3>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                                Standard items every LLC should have on file. Check off items as you complete them.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                {COMPLIANCE_CHECKLIST.map(item => {
+                                    const autoChecked = item.field && editFields[item.field];
+                                    const manualChecked = checklistState[item.key];
+                                    const isChecked = autoChecked || manualChecked;
+                                    return (
+                                        <div
+                                            key={item.key}
+                                            onClick={() => {
+                                                if (!autoChecked) setChecklistState(prev => ({ ...prev, [item.key]: !prev[item.key] }));
+                                            }}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '12px',
+                                                padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
+                                                background: isChecked ? 'rgba(16, 185, 129, 0.06)' : 'transparent',
+                                                transition: 'background 0.15s',
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: '20px', height: '20px', borderRadius: '4px', flexShrink: 0,
+                                                border: isChecked ? 'none' : '2px solid var(--border-color)',
+                                                background: isChecked ? 'var(--color-success)' : 'transparent',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                transition: 'all 0.15s',
+                                            }}>
+                                                {isChecked && <Icon name="check" size={12} />}
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: 600, textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.7 : 1 }}>
+                                                    {item.label}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.desc}</div>
+                                            </div>
+                                            {autoChecked && <span style={{ fontSize: '0.65rem', color: 'var(--color-success)', fontWeight: 600 }}>AUTO</span>}
+                                        </div>
+                                    );
+                                })}
                             </div>
-
-                            <div className="input-group" style={{ marginTop: '16px' }}>
-                                <label>Linked Domains (comma separated)</label>
-                                <input
-                                    className="input"
-                                    placeholder="e.g. gcventures.com, mysite.io"
-                                    value={editFields.domains}
-                                    onChange={(e) => setField('domains', e.target.value)}
-                                />
-                            </div>
-
-                            <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                                    {saving ? 'Saving...' : saved ? <><Icon name="check" size={14} /> Saved!</> : <><Icon name="save" size={14} /> Save Changes</>}
-                                </button>
+                            <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-elevated)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <Icon name="info" size={12} className="icon-inline" /> Items marked AUTO are checked based on your entity information above.
                             </div>
                         </div>
 
