@@ -2645,6 +2645,127 @@ textarea.input {
   border: 1px solid var(--border-subtle);
 }
 
+.day-timeline.compact-strip {
+  min-height: 0;
+  height: 48px;
+}
+
+/* ===== SESSION LIST ===== */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  transition: background 0.15s ease, transform 0.15s ease;
+  gap: 12px;
+}
+
+.session-list-item:hover {
+  background: color-mix(in srgb, var(--bg-input) 80%, var(--accent) 20%);
+  transform: translateX(2px);
+}
+
+.session-list-item.expanded {
+  background: color-mix(in srgb, var(--bg-input) 70%, var(--accent) 30%);
+}
+
+.session-list-item.sleep {
+  opacity: 0.6;
+}
+
+.session-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.session-list-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-list-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-list-time {
+  font-size: 0.78rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.session-list-duration {
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Session detail expand */
+.session-detail-expand {
+  padding: 4px 14px 12px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: slideDown 0.2s ease-out;
+}
+
+.session-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+}
+
+/* ===== FILTER CHIPS ===== */
+.session-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.session-filter-chip:hover {
+  background: var(--bg-input);
+}
+
+.session-filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .timeline-hour {
   position: absolute;
   top: 0;
