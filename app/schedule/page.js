@@ -106,6 +106,7 @@ export default function SchedulePage() {
     // Timeline detail panel
     const [expandedBlock, setExpandedBlock] = useState(null);
     const [filterCompany, setFilterCompany] = useState('all');
+    const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
     const timelineRef = useRef(null);
 
@@ -628,51 +629,62 @@ export default function SchedulePage() {
             )}
 
             {/* ===== MONTHLY CALENDAR ===== */}
-            <div className="schedule-calendar card">
+            <div className={`schedule-calendar card ${calendarCollapsed ? 'calendar-compact' : ''}`}>
                 <div className="calendar-header">
                     <button className="btn-icon" onClick={prevMonth}><Icon name="arrow-left" size={18} /></button>
                     <h3 className="calendar-title">{MONTH_NAMES[currentMonth - 1]} {currentYear}</h3>
-                    <button className="btn-icon" onClick={nextMonth}><Icon name="arrow-right" size={18} /></button>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="btn-icon" onClick={nextMonth}><Icon name="arrow-right" size={18} /></button>
+                        <button className="btn-icon" onClick={() => setCalendarCollapsed(!calendarCollapsed)} title={calendarCollapsed ? 'Expand' : 'Collapse'}>
+                            <Icon name={calendarCollapsed ? 'chevron-down' : 'chevron-up'} size={16} />
+                        </button>
+                    </div>
                 </div>
-                <div className="calendar-day-names">
-                    {DAY_NAMES.map(d => <div key={d} className="calendar-day-name">{d}</div>)}
-                </div>
-                <div className="calendar-grid">
-                    {/* Empty cells for offset */}
-                    {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                        <div key={`empty-${i}`} className="calendar-day empty" />
-                    ))}
-                    {/* Day cells */}
-                    {Array.from({ length: daysInMonth }).map((_, i) => {
-                        const day = i + 1;
-                        const info = getDayInfo(day);
-                        const isToday = isCurrentMonth && day === todayDate;
-                        const isSelected = day === selectedDate;
-                        const hasActivity = info.hasSessions || info.hasBlocks || info.hasScheduledTasks;
-
-                        return (
-                            <div
-                                key={day}
-                                className={`calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${hasActivity ? 'has-activity' : ''} ${info.isException ? 'exception' : ''}`}
-                                onClick={() => setSelectedDate(day)}
-                                onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    if (info.hasBlocks && !info.isException) handleMarkException(day);
-                                }}
-                            >
-                                <span className="calendar-day-number">{day}</span>
-                                {info.colors.length > 0 && (
-                                    <div className="calendar-day-dots">
-                                        {info.colors.slice(0, 3).map((c, ci) => (
-                                            <span key={ci} className="calendar-dot" style={{ backgroundColor: c }} />
-                                        ))}
+                {!calendarCollapsed && (
+                    <>
+                        <div className="calendar-day-names">
+                            {DAY_NAMES.map(d => <div key={d} className="calendar-day-name">{d}</div>)}
+                        </div>
+                        <div className="calendar-grid">
+                            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                                <div key={`empty-${i}`} className="calendar-day empty" />
+                            ))}
+                            {Array.from({ length: daysInMonth }).map((_, i) => {
+                                const day = i + 1;
+                                const info = getDayInfo(day);
+                                const isToday = isCurrentMonth && day === todayDate;
+                                const isSelected = day === selectedDate;
+                                const hasActivity = info.hasSessions || info.hasBlocks || info.hasScheduledTasks;
+                                return (
+                                    <div
+                                        key={day}
+                                        className={`calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${hasActivity ? 'has-activity' : ''} ${info.isException ? 'exception' : ''}`}
+                                        onClick={() => setSelectedDate(day)}
+                                        onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            if (info.hasBlocks && !info.isException) handleMarkException(day);
+                                        }}
+                                    >
+                                        <span className="calendar-day-number">{day}</span>
+                                        {info.colors.length > 0 && (
+                                            <div className="calendar-day-dots">
+                                                {info.colors.slice(0, 3).map((c, ci) => (
+                                                    <span key={ci} className="calendar-dot" style={{ backgroundColor: c }} />
+                                                ))}
+                                            </div>
+                                        )}
+                                        {info.isException && <span className="calendar-exception-mark">✕</span>}
                                     </div>
-                                )}
-                                {info.isException && <span className="calendar-exception-mark">✕</span>}
-                            </div>
-                        );
-                    })}
-                </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
+                {calendarCollapsed && selectedDate && (
+                    <div style={{ padding: '8px 0', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        Selected: <strong>{MONTH_NAMES[currentMonth - 1]} {selectedDate}</strong>
+                    </div>
+                )}
             </div>
 
             {/* ===== DAY VIEW ===== */}
@@ -707,29 +719,56 @@ export default function SchedulePage() {
                         </div>
                     )}
 
-
-
+                    {/* ===== DAILY BREAKDOWN BAR ===== */}
+                    {timelineData.listItems.filter(it => it.type !== 'sleep').length > 0 && (() => {
+                        const nonSleep = timelineData.listItems.filter(it => it.type !== 'sleep');
+                        const totalMins = nonSleep.reduce((sum, it) => sum + (it.durationMins || 0), 0);
+                        if (totalMins <= 0) return null;
+                        return (
+                            <div className="day-breakdown-bar">
+                                {nonSleep.map(item => {
+                                    const pct = Math.max((item.durationMins / totalMins) * 100, 2);
+                                    const durStr = item.durationMins >= 60
+                                        ? `${Math.floor(item.durationMins / 60)}h ${item.durationMins % 60}m`
+                                        : `${item.durationMins}m`;
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className="breakdown-segment"
+                                            style={{ width: `${pct}%`, backgroundColor: item.color }}
+                                            title={`${item.label}: ${durStr}`}
+                                        >
+                                            {pct > 10 && <span className="breakdown-label">{item.label}</span>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
 
                     {/* ===== FILTER CHIPS ===== */}
-                    {timelineData.companies.length > 1 && (
+                    {timelineData.companies.length >= 1 && (
                         <div style={{ display: 'flex', gap: '6px', marginTop: '12px', flexWrap: 'wrap' }}>
                             <button
                                 className={`session-filter-chip ${filterCompany === 'all' ? 'active' : ''}`}
                                 onClick={() => setFilterCompany('all')}
                             >
-                                All
+                                All ({timelineData.listItems.length})
                             </button>
-                            {timelineData.companies.map(c => (
-                                <button
-                                    key={c.name}
-                                    className={`session-filter-chip ${filterCompany === c.name ? 'active' : ''}`}
-                                    style={filterCompany === c.name ? { backgroundColor: c.color, borderColor: c.color, color: '#fff' } : { borderColor: c.color, color: c.color }}
-                                    onClick={() => setFilterCompany(filterCompany === c.name ? 'all' : c.name)}
-                                >
-                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: c.color, flexShrink: 0 }} />
-                                    {c.name}
-                                </button>
-                            ))}
+                            {timelineData.companies.map(c => {
+                                const count = timelineData.listItems.filter(it => it.companyName === c.name).length;
+                                return (
+                                    <button
+                                        key={c.name}
+                                        className={`session-filter-chip ${filterCompany === c.name ? 'active' : ''}`}
+                                        style={filterCompany === c.name ? { backgroundColor: c.color, borderColor: c.color, color: '#fff' } : { borderColor: c.color, color: c.color }}
+                                        onClick={() => setFilterCompany(filterCompany === c.name ? 'all' : c.name)}
+                                    >
+                                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: c.color, flexShrink: 0 }} />
+                                        {c.name} ({count})
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -750,13 +789,16 @@ export default function SchedulePage() {
                                 <div key={item.id}>
                                     <div
                                         className={`session-list-item ${isExpanded ? 'expanded' : ''} ${isSleep ? 'sleep' : ''}`}
-                                        onClick={() => item.sessions?.length > 0 && setExpandedBlock(isExpanded ? null : item.id)}
-                                        style={{ cursor: item.sessions?.length > 0 ? 'pointer' : 'default' }}
+                                        onClick={() => setExpandedBlock(isExpanded ? null : item.id)}
+                                        style={{ cursor: 'pointer' }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                                             <div className="session-color-dot" style={{ backgroundColor: item.color }} />
                                             <div style={{ minWidth: 0, flex: 1 }}>
-                                                <div className="session-list-name">{item.label}</div>
+                                                <div className="session-list-name">
+                                                    {isSleep && <Icon name="moon" size={12} style={{ marginRight: '4px', opacity: 0.6 }} />}
+                                                    {item.label}
+                                                </div>
                                                 <div className="session-list-meta">
                                                     {item.companyName}
                                                     {item.sessionCount > 1 && ` • ${item.sessionCount} sessions`}
@@ -769,9 +811,9 @@ export default function SchedulePage() {
                                         </div>
                                     </div>
                                     {/* Expanded session details */}
-                                    {isExpanded && item.sessions?.length > 0 && (
+                                    {isExpanded && (
                                         <div className="session-detail-expand">
-                                            {item.sessions.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)).map((session, si) => {
+                                            {item.sessions?.length > 0 && item.sessions.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)).map((session, si) => {
                                                 const s = new Date(session.start_time);
                                                 const e = session.end_time ? new Date(session.end_time) : null;
                                                 const dur = e ? Math.round((e - s) / 60000) : 0;
@@ -786,6 +828,12 @@ export default function SchedulePage() {
                                                     </div>
                                                 );
                                             })}
+                                            {isSleep && sleepLog && (
+                                                <div className="session-detail-row" style={{ opacity: 0.7 }}>
+                                                    <span>🌙 Sleep log data</span>
+                                                    <span>{sleepLog.quality ? `Quality: ${sleepLog.quality}/5` : ''}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
