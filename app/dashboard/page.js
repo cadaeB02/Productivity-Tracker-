@@ -373,17 +373,61 @@ function RecentActivityWidget({ transactions, sessions }) {
     );
 }
 
-function ProjectsOverviewWidget({ projects, companies }) {
+function ProjectsOverviewWidget({ projects, companies, sessions }) {
+    const [sortBy, setSortBy] = useState('hours'); // 'name' | 'hours' | 'recent'
+
     if (projects.length === 0) {
         return <div className="nc-widget-body"><div className="nc-empty">No projects yet</div></div>;
     }
+
+    // Compute hours per project from sessions
+    const projectHours = {};
+    const projectLastWorked = {};
+    sessions.forEach(s => {
+        const pid = s.project_id;
+        if (!pid) return;
+        projectHours[pid] = (projectHours[pid] || 0) + (s.duration || 0);
+        const t = new Date(s.start_time).getTime();
+        if (!projectLastWorked[pid] || t > projectLastWorked[pid]) projectLastWorked[pid] = t;
+    });
+
+    const maxHours = Math.max(...Object.values(projectHours), 1);
+
+    // Sort
+    const sortedProjects = [...projects].sort((a, b) => {
+        if (sortBy === 'hours') return (projectHours[b.id] || 0) - (projectHours[a.id] || 0);
+        if (sortBy === 'recent') return (projectLastWorked[b.id] || 0) - (projectLastWorked[a.id] || 0);
+        return a.name.localeCompare(b.name);
+    });
+
     return (
         <div className="nc-widget-body">
-            {projects.slice(0, 6).map(p => {
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                {['hours', 'recent', 'name'].map(s => (
+                    <button
+                        key={s}
+                        onClick={() => setSortBy(s)}
+                        style={{
+                            fontSize: '0.6rem', fontWeight: 600, textTransform: 'uppercase',
+                            letterSpacing: '0.04em', padding: '2px 8px', borderRadius: '4px',
+                            border: '1px solid ' + (sortBy === s ? 'var(--color-accent)' : 'var(--border-subtle)'),
+                            background: sortBy === s ? 'rgba(139,92,246,0.1)' : 'transparent',
+                            color: sortBy === s ? 'var(--color-accent)' : 'var(--text-muted)',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                    >
+                        {s === 'hours' ? 'By Hours' : s === 'recent' ? 'Recent' : 'A-Z'}
+                    </button>
+                ))}
+            </div>
+            {sortedProjects.slice(0, 6).map(p => {
                 const company = companies.find(c => c.id === p.company_id);
+                const hrs = projectHours[p.id] || 0;
+                const pct = (hrs / maxHours) * 100;
+                const lastWorked = projectLastWorked[p.id];
                 return (
                     <div key={p.id} className="nc-project-item">
-                        <div className="nc-project-info">
+                        <div className="nc-project-info" style={{ flex: 1 }}>
                             <div className="nc-project-name">{p.name}</div>
                             {company && (
                                 <div className="nc-project-company">
@@ -391,6 +435,16 @@ function ProjectsOverviewWidget({ projects, companies }) {
                                     {company.name}
                                 </div>
                             )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                            {hrs > 0 && (
+                                <div style={{ width: '40px', height: '6px', borderRadius: '3px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.max(pct, 5)}%`, height: '100%', borderRadius: '3px', backgroundColor: company?.color || 'var(--color-accent)', transition: 'width 0.4s' }} />
+                                </div>
+                            )}
+                            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: hrs > 0 ? 'var(--text-secondary)' : 'var(--text-muted)', minWidth: '36px', textAlign: 'right' }}>
+                                {hrs > 0 ? formatDurationShort(hrs) : '0m'}
+                            </span>
                         </div>
                     </div>
                 );
@@ -580,7 +634,7 @@ export default function DashboardPage() {
             case 'recent-activity':
                 return <RecentActivityWidget transactions={transactions} sessions={sessions} />;
             case 'projects-overview':
-                return <ProjectsOverviewWidget projects={projects} companies={companies} />;
+                return <ProjectsOverviewWidget projects={projects} companies={companies} sessions={sessions} />;
             default:
                 return <div className="nc-widget-body"><div className="nc-empty">Unknown widget</div></div>;
         }
