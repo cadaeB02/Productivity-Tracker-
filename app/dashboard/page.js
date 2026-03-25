@@ -144,28 +144,13 @@ function ActiveTimerWidget({ activeSessions, companies, projects, tasks, onClock
         return () => clearInterval(interval);
     }, [activeSessions]);
 
-    if (activeSessions.length === 0) {
-        return (
-            <div className="nc-widget-body">
-                <div className="nc-timer-tiles">
-                    {companies.map(c => (
-                        <button
-                            key={c.id}
-                            className="nc-timer-tile"
-                            onClick={() => onClockIn(c.id)}
-                        >
-                            <span className="color-dot" style={{ backgroundColor: c.color, width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
-                            <span className="nc-timer-tile-name">{c.name}</span>
-                            <span className="nc-timer-tile-action">Clock In</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
+    // Companies that DON'T have an active session
+    const activeCompanyIds = activeSessions.map(s => s.company_id);
+    const availableCompanies = companies.filter(c => !activeCompanyIds.includes(c.id));
 
     return (
         <div className="nc-widget-body">
+            {/* Active timers */}
             {activeSessions.map(s => {
                 const company = companies.find(c => c.id === s.company_id);
                 const task = s.tasks?.name || tasks.find(t => t.id === s.task_id)?.name || '';
@@ -190,6 +175,23 @@ function ActiveTimerWidget({ activeSessions, companies, projects, tasks, onClock
                     </div>
                 );
             })}
+
+            {/* Remaining companies to clock into */}
+            {availableCompanies.length > 0 && (
+                <div className="nc-timer-tiles" style={activeSessions.length > 0 ? { marginTop: '8px', borderTop: '1px solid var(--border-subtle)', paddingTop: '8px' } : undefined}>
+                    {availableCompanies.map(c => (
+                        <button
+                            key={c.id}
+                            className="nc-timer-tile"
+                            onClick={() => onClockIn(c.id)}
+                        >
+                            <span className="color-dot" style={{ backgroundColor: c.color, width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
+                            <span className="nc-timer-tile-name">{c.name}</span>
+                            <span className="nc-timer-tile-action">Clock In</span>
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
