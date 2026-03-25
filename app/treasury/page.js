@@ -672,14 +672,14 @@ export default function TreasuryPage() {
                                         <button
                                             type="button"
                                             className={`treasury-type-btn ${form.type === 'revenue' ? 'active revenue' : ''}`}
-                                            onClick={() => setForm(f => ({ ...f, type: 'revenue', category: '' }))}
+                                            onClick={() => setForm(f => ({ ...f, type: 'revenue', ...(f.type !== 'revenue' ? { category: '' } : {}) }))}
                                         >
                                             <Icon name="arrow-down" size={12} /> Revenue
                                         </button>
                                         <button
                                             type="button"
                                             className={`treasury-type-btn ${form.type === 'expense' ? 'active expense' : ''}`}
-                                            onClick={() => setForm(f => ({ ...f, type: 'expense', category: '' }))}
+                                            onClick={() => setForm(f => ({ ...f, type: 'expense', ...(f.type !== 'expense' ? { category: '' } : {}) }))}
                                         >
                                             <Icon name="arrow-up" size={12} /> Expense
                                         </button>
@@ -926,14 +926,14 @@ export default function TreasuryPage() {
                                     <button
                                         type="button"
                                         className={`treasury-type-btn ${form.type === 'revenue' ? 'active revenue' : ''}`}
-                                        onClick={() => setForm(f => ({ ...f, type: 'revenue', category: '' }))}
+                                        onClick={() => setForm(f => ({ ...f, type: 'revenue', ...(f.type !== 'revenue' ? { category: '' } : {}) }))}
                                     >
                                         <Icon name="arrow-down" size={12} /> Revenue
                                     </button>
                                     <button
                                         type="button"
                                         className={`treasury-type-btn ${form.type === 'expense' ? 'active expense' : ''}`}
-                                        onClick={() => setForm(f => ({ ...f, type: 'expense', category: '' }))}
+                                        onClick={() => setForm(f => ({ ...f, type: 'expense', ...(f.type !== 'expense' ? { category: '' } : {}) }))}
                                     >
                                         <Icon name="arrow-up" size={12} /> Expense
                                     </button>
