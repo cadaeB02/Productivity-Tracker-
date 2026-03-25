@@ -13,6 +13,7 @@ import { formatDuration } from '@/lib/utils';
 
 // ── Widget Registry ──
 const WIDGET_REGISTRY = [
+    { id: 'hours-by-company', name: 'Hours by Company', icon: 'chart', description: 'Time per company bar chart' },
     { id: 'quick-notes', name: 'Quick Notes', icon: 'note', description: 'Recent notes, add new' },
     { id: 'active-timer', name: 'Active Timer', icon: 'timer', description: 'Running work session' },
     { id: 'upcoming-recurring', name: 'Upcoming Recurring', icon: 'dollar', description: 'Next charges due' },
@@ -21,7 +22,7 @@ const WIDGET_REGISTRY = [
     { id: 'projects-overview', name: 'Projects Overview', icon: 'folder', description: 'Active projects' },
 ];
 
-const DEFAULT_WIDGETS = ['quick-notes', 'active-timer', 'upcoming-recurring', 'revenue-snapshot'];
+const DEFAULT_WIDGETS = ['hours-by-company', 'active-timer', 'quick-notes', 'revenue-snapshot'];
 
 function getStoredLayout() {
     if (typeof window === 'undefined') return null;
@@ -55,9 +56,68 @@ function timeAgo(dateStr) {
     return days < 30 ? `${days}d ago` : formatDate(dateStr.split('T')[0]);
 }
 
+function formatDurationShort(totalSeconds) {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
+}
+
 // ═══════════════════════════════════════
 // WIDGET COMPONENTS
 // ═══════════════════════════════════════
+
+function HoursByCompanyWidget({ sessions, companies }) {
+    const [animated, setAnimated] = useState(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setAnimated(true), 50);
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Aggregate hours by company
+    const companyHours = {};
+    const companyColors = {};
+    sessions.forEach(s => {
+        const name = s.companies?.name || companies.find(c => c.id === s.company_id)?.name || 'Unknown';
+        const color = s.companies?.color || companies.find(c => c.id === s.company_id)?.color || '#6366f1';
+        companyHours[name] = (companyHours[name] || 0) + (s.duration || 0);
+        companyColors[name] = color;
+    });
+
+    const entries = Object.entries(companyHours).sort((a, b) => b[1] - a[1]);
+    const maxSeconds = Math.max(...entries.map(e => e[1]), 1);
+
+    if (entries.length === 0) {
+        return <div className="nc-widget-body"><div className="nc-empty">No tracked time yet</div></div>;
+    }
+
+    return (
+        <div className="nc-widget-body">
+            <div className="nc-bar-chart">
+                {entries.map(([name, seconds]) => {
+                    const pct = (seconds / maxSeconds) * 100;
+                    return (
+                        <div key={name} className="nc-bar-item">
+                            <div className="nc-bar-value">{formatDurationShort(seconds)}</div>
+                            <div className="nc-bar-track">
+                                <div
+                                    className="nc-bar-fill"
+                                    style={{
+                                        height: animated ? `${Math.max(pct, 4)}%` : '0%',
+                                        backgroundColor: companyColors[name],
+                                        transition: `height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)`,
+                                    }}
+                                />
+                            </div>
+                            <div className="nc-bar-label">{name}</div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
 
 function QuickNotesWidget({ notes, companies, onAddNote, onAssignCompany }) {
     const [newNote, setNewNote] = useState('');
@@ -285,7 +345,7 @@ function RecentActivityWidget({ transactions, sessions }) {
         })),
         ...sessions.slice(0, 5).map(s => ({
             id: `ses-${s.id}`, type: 'session', label: s.tasks?.name || s.summary || 'Work session',
-            meta: formatDuration(s.duration_seconds || 0),
+            meta: formatDuration(s.duration || 0),
             date: s.start_time, icon: 'timer',
             className: 'session',
         })),
@@ -390,7 +450,7 @@ export default function DashboardPage() {
             setNotes(notesData);
             setActiveSessions(active);
             setProjects(projs);
-            setSessions(allSessions.slice(0, 10));
+            setSessions(allSessions);
             setTasks(allTasks);
         } catch (err) {
             console.error('Dashboard load error:', err);
@@ -507,6 +567,8 @@ export default function DashboardPage() {
     // Render widget
     const renderWidget = (widgetId) => {
         switch (widgetId) {
+            case 'hours-by-company':
+                return <HoursByCompanyWidget sessions={sessions} companies={companies} />;
             case 'quick-notes':
                 return <QuickNotesWidget notes={notes} companies={companies} onAddNote={handleAddNote} onAssignCompany={handleAssignCompany} />;
             case 'active-timer':
