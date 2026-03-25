@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions } from '@/lib/store';
+import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions, getAllProjects } from '@/lib/store';
 
 const EXPENSE_CATEGORIES = ['Operations', 'Software', 'Marketing', 'Legal', 'Payroll', 'Supplies', 'Travel', 'Other'];
-const REVENUE_CATEGORIES = ['Services', 'Product Sales', 'Consulting', 'Contract', 'Recurring', 'Other'];
+const REVENUE_CATEGORIES = ['Services', 'Product Sales', 'Consulting', 'Contract', 'Paycheck', 'Recurring', 'Other'];
 const SCAN_CATEGORIES = ['Food & Dining', 'Software & Tools', 'Office', 'Travel', 'Gas & Auto', 'Shopping', 'Entertainment', 'Utilities', 'Marketing', 'Contractors', 'Paycheck', 'Other'];
 
 // ── Image Processing Helpers ──
@@ -55,6 +55,7 @@ export default function TreasuryPage() {
     const [companies, setCompanies] = useState([]);
     const [transactions, setTransactions] = useState([]);
     const [sessions, setSessions] = useState([]);
+    const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -90,14 +91,16 @@ export default function TreasuryPage() {
 
     const loadData = useCallback(async () => {
         try {
-            const [comps, txns, allSessions] = await Promise.all([
+            const [comps, txns, allSessions, allProjects] = await Promise.all([
                 getCompanies(),
                 getTransactions(activeCompanyId ? { companyId: activeCompanyId } : {}),
                 getSessions(),
+                getAllProjects(),
             ]);
             comps.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
             setCompanies(comps);
             setTransactions(txns);
+            setProjects(allProjects || []);
             // Filter sessions by company if needed
             if (activeCompanyId) {
                 setSessions(allSessions.filter(s => s.company_id === activeCompanyId));
@@ -122,7 +125,9 @@ export default function TreasuryPage() {
             description: '',
             category: '',
             company_id: activeCompanyId || '',
+            project_id: '',
             date: new Date().toISOString().split('T')[0],
+            is_recurring: false,
         });
         setEditingId(null);
         setShowForm(false);
@@ -134,13 +139,18 @@ export default function TreasuryPage() {
 
         try {
             if (editingId) {
-                await updateTransaction(editingId, {
+                const updates = {
                     type: form.type,
                     amount: parseFloat(form.amount),
                     description: form.description,
                     category: form.category,
                     date: form.date,
-                });
+                    company_id: form.company_id,
+                    is_recurring: form.is_recurring || false,
+                };
+                if (form.project_id) updates.project_id = form.project_id;
+                else updates.project_id = null;
+                await updateTransaction(editingId, updates);
             } else {
                 await addTransaction({
                     type: form.type,
@@ -149,6 +159,7 @@ export default function TreasuryPage() {
                     category: form.category,
                     company_id: form.company_id,
                     date: form.date,
+                    is_recurring: form.is_recurring || false,
                 });
             }
             resetForm();
@@ -165,7 +176,9 @@ export default function TreasuryPage() {
             description: txn.description || '',
             category: txn.category || '',
             company_id: txn.company_id,
+            project_id: txn.project_id || '',
             date: txn.date,
+            is_recurring: txn.is_recurring || false,
         });
         setEditingId(txn.id);
         setShowForm(true);
@@ -261,6 +274,7 @@ export default function TreasuryPage() {
                     category: item.category || 'Other',
                     company_id: item.company_id || activeCompanyId,
                     date: item.date || new Date().toISOString().split('T')[0],
+                    is_recurring: item.is_recurring || false,
                 });
             }
             setScanSaved(true);
@@ -692,12 +706,81 @@ export default function TreasuryPage() {
                                     onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
                                 />
                             </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                <div className="input-group">
+                                    <label>Company</label>
+                                    <select className="input" value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value, project_id: '' }))}>
+                                        <option value="">Select company...</option>
+                                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="input-group">
+                                    <label>Project (optional)</label>
+                                    <select className="input" value={form.project_id || ''} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
+                                        <option value="">No project</option>
+                                        {projects.filter(p => p.company_id === form.company_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={form.is_recurring || false} onChange={e => setForm(f => ({ ...f, is_recurring: e.target.checked }))} /> Recurring
+                                </label>
+                            </div>
                             <button className="btn btn-primary" type="submit">
                                 <Icon name="save" size={14} /> {editingId ? 'Update' : 'Add'} Transaction
                             </button>
                         </form>
                     </div>
                 )}
+
+                {/* Upcoming Recurring Expenses */}
+                {(() => {
+                    const recurring = transactions.filter(t => t.is_recurring);
+                    if (recurring.length === 0) return null;
+                    // Group by description to deduplicate, take latest date for each
+                    const grouped = {};
+                    recurring.forEach(t => {
+                        const key = t.description || t.category || 'Recurring';
+                        if (!grouped[key] || t.date > grouped[key].date) grouped[key] = t;
+                    });
+                    const items = Object.values(grouped).map(t => {
+                        const lastDate = new Date(t.date + 'T00:00:00');
+                        const nextDate = new Date(lastDate);
+                        nextDate.setMonth(nextDate.getMonth() + 1);
+                        const daysUntil = Math.ceil((nextDate - new Date()) / (1000 * 60 * 60 * 24));
+                        return { ...t, nextDate, daysUntil };
+                    }).sort((a, b) => a.daysUntil - b.daysUntil);
+
+                    return (
+                        <div className="card" style={{ marginBottom: '20px' }}>
+                            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Icon name="timer" size={16} /> Upcoming Recurring
+                            </h3>
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                                {items.map((item, i) => (
+                                    <div key={i} style={{
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                                        background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                                    }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{item.description || 'Recurring Charge'}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                Next: {item.nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                {item.daysUntil <= 7 && <span style={{ marginLeft: '6px', padding: '1px 6px', background: 'rgba(239,68,68,0.15)', borderRadius: '4px', fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 600 }}>{item.daysUntil <= 0 ? 'Due!' : `${item.daysUntil}d`}</span>}
+                                                {item.daysUntil > 7 && <span style={{ marginLeft: '6px', padding: '1px 6px', background: 'rgba(234,179,8,0.15)', borderRadius: '4px', fontSize: '0.65rem', color: '#eab308', fontWeight: 600 }}>{item.daysUntil}d</span>}
+                                            </div>
+                                        </div>
+                                        <span style={{ fontWeight: 700, color: item.type === 'expense' ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '0.9rem' }}>
+                                            {item.type === 'expense' ? '−' : '+'}{formatCurrency(item.amount)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Transaction List */}
                 {transactions.length === 0 ? (
@@ -720,6 +803,7 @@ export default function TreasuryPage() {
                                             <div className="treasury-row-meta">
                                                 {formatDate(txn.date)}
                                                 {txn.category && <> · <span className="treasury-category">{txn.category}</span></>}
+                                                {txn.is_recurring && <span style={{ marginLeft: '6px', padding: '1px 6px', background: 'rgba(234,179,8,0.15)', borderRadius: '4px', fontSize: '0.65rem', color: '#eab308', fontWeight: 600 }}>Recurring</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -939,6 +1023,7 @@ export default function TreasuryPage() {
                                             <div className="treasury-row-meta">
                                                 {formatDate(txn.date)}
                                                 {txn.category && <> · <span className="treasury-category">{txn.category}</span></>}
+                                                {txn.is_recurring && <span style={{ marginLeft: '6px', padding: '1px 6px', background: 'rgba(234,179,8,0.15)', borderRadius: '4px', fontSize: '0.65rem', color: '#eab308', fontWeight: 600 }}>Recurring</span>}
                                                 {company && (
                                                     <>
                                                         {' '}·{' '}

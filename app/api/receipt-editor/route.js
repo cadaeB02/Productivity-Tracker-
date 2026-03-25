@@ -86,8 +86,8 @@ export async function POST(request) {
 
         const lastMessage = messages[messages.length - 1].content;
 
-        // Retry with exponential backoff for 429 rate limits
-        const MAX_RETRIES = 3;
+        // Retry with exponential backoff for 429/503 errors
+        const MAX_RETRIES = 4;
         let lastError = null;
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -113,10 +113,13 @@ export async function POST(request) {
                 return NextResponse.json({ success: true, data: parsed });
             } catch (err) {
                 lastError = err;
-                const is429 = err.message?.includes('429') || err.message?.includes('Resource exhausted');
+                const isRetryable = err.message?.includes('429') || err.message?.includes('503') 
+                    || err.message?.includes('Resource exhausted') || err.message?.includes('Service Unavailable')
+                    || err.message?.includes('high demand');
 
-                if (is429 && attempt < MAX_RETRIES - 1) {
+                if (isRetryable && attempt < MAX_RETRIES - 1) {
                     const delay = Math.pow(2, attempt + 1) * 1000;
+                    console.log(`[receipt-editor] Retryable error, attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${delay/1000}s`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     continue;
                 }
@@ -124,10 +127,16 @@ export async function POST(request) {
             }
         }
 
+        // User-friendly error message
+        const errMsg = lastError?.message || '';
+        const isCapacity = errMsg.includes('503') || errMsg.includes('429') || errMsg.includes('high demand');
+        const friendlyMsg = isCapacity
+            ? 'AI model is busy right now — please try again in a moment.'
+            : 'Failed to process your request. Please try again.';
+        
         console.error('Receipt editor error after retries:', lastError);
         return NextResponse.json(
-            { error: lastError?.message || 'Failed to process request' },
-            { status: 500 }
+            { success: true, data: { message: friendlyMsg, updates: [] } }
         );
     } catch (error) {
         console.error('Receipt editor error:', error);
