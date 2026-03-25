@@ -9,6 +9,7 @@ import { useCompany } from '@/components/CompanyContext';
 import Icon from '@/components/Icon';
 
 const NAV_ITEMS = [
+    { href: '/dashboard', label: 'Nerve Center', icon: 'brain' },
     { href: '/', label: 'Timer', icon: 'timer' },
     { href: '/projects', label: 'Projects', icon: 'folder' },
     { href: '/compliance', label: 'Compliance', icon: 'shield' },
