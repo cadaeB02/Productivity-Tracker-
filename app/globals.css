@@ -4002,9 +4002,18 @@ textarea.input {
     border: 2px dashed var(--color-accent-muted, rgba(139, 92, 246, 0.4));
     cursor: grab;
     position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .nc-widget-card.edit-mode:active {
     cursor: grabbing;
+}
+.nc-widget-card.edit-mode.drop-target {
+    border-color: #3b82f6;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.4), 0 0 4px rgba(59, 130, 246, 0.6), inset 0 0 8px rgba(59, 130, 246, 0.1);
+    transform: scale(1.01);
+}
+.nc-widget-grid.editing .nc-widget-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.15s;
 }
 
 /* Widget Header */

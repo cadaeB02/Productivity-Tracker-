@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
+import { useSidebarOverride } from '@/components/SidebarOverrideContext';
 import {
     getCompanies, getTransactions, getNotes, addNote, updateNote,
     getActiveSessions, getAllProjects, getSessions,
@@ -96,8 +97,8 @@ function QuickNotesWidget({ notes, companies, onAddNote, onAssignCompany }) {
                                 className="input"
                                 style={{ fontSize: '0.65rem', width: 'auto', padding: '2px 4px' }}
                                 autoFocus
-                                onChange={e => { onAssignCompany(note.id, e.target.value); setAssigningId(null); }}
-                                onBlur={() => setAssigningId(null)}
+                                onChange={e => { const val = e.target.value; if (val) { onAssignCompany(note.id, val); } setAssigningId(null); }}
+                                onBlur={() => setTimeout(() => setAssigningId(null), 150)}
                                 defaultValue=""
                             >
                                 <option value="" disabled>Assign...</option>
@@ -350,7 +351,10 @@ export default function DashboardPage() {
 
     // Drag state
     const dragItem = useRef(null);
-    const dragOverItem = useRef(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+
+    // Sidebar override for edit mode
+    const { setOverrideContent } = useSidebarOverride();
 
     // Load layout from localStorage
     useEffect(() => {
@@ -412,48 +416,66 @@ export default function DashboardPage() {
         } catch (err) { console.error('Assign company error:', err); }
     };
 
-    // Edit mode
+    // Edit mode — push widget picker to sidebar
     const enterEditMode = () => {
         setEditWidgetIds([...widgetIds]);
         setEditing(true);
     };
 
-    const saveLayout_ = () => {
+    const saveAndExit = () => {
         setWidgetIds(editWidgetIds);
         saveLayout(editWidgetIds);
         setEditing(false);
+        setOverrideContent(null);
+    };
+
+    const cancelEdit = () => {
+        setEditing(false);
+        setOverrideContent(null);
     };
 
     const addWidget = (id) => {
         if (!editWidgetIds.includes(id)) {
-            setEditWidgetIds([...editWidgetIds, id]);
+            setEditWidgetIds(prev => [...prev, id]);
         }
     };
 
     const removeWidget = (id) => {
-        setEditWidgetIds(editWidgetIds.filter(w => w !== id));
+        setEditWidgetIds(prev => prev.filter(w => w !== id));
     };
 
-    // Drag and drop
-    const handleDragStart = (index) => {
+    // Smooth drag and drop with live reorder
+    const handleDragStart = (e, index) => {
         dragItem.current = index;
+        e.dataTransfer.effectAllowed = 'move';
     };
 
     const handleDragOver = (e, index) => {
         e.preventDefault();
-        dragOverItem.current = index;
-    };
-
-    const handleDrop = () => {
+        e.dataTransfer.dropEffect = 'move';
+        if (dragItem.current === null || dragItem.current === index) {
+            setDragOverIndex(null);
+            return;
+        }
+        setDragOverIndex(index);
+        // Live reorder
         const from = dragItem.current;
-        const to = dragOverItem.current;
-        if (from === null || to === null || from === to) return;
         const items = [...editWidgetIds];
         const [moved] = items.splice(from, 1);
-        items.splice(to, 0, moved);
+        items.splice(index, 0, moved);
         setEditWidgetIds(items);
+        dragItem.current = index;
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
         dragItem.current = null;
-        dragOverItem.current = null;
+        setDragOverIndex(null);
+    };
+
+    const handleDragEnd = () => {
+        dragItem.current = null;
+        setDragOverIndex(null);
     };
 
     // Render widget
@@ -478,125 +500,115 @@ export default function DashboardPage() {
 
     const currentWidgets = editing ? editWidgetIds : widgetIds;
 
+    // Push widget picker to sidebar when editing
+    useEffect(() => {
+        if (!editing) {
+            setOverrideContent(null);
+            return;
+        }
+        setOverrideContent(
+            <div className="nc-edit-sidebar-list" style={{ padding: '8px' }}>
+                <div style={{ padding: '8px 4px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '2px' }}>Available Widgets</h3>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Drag to reorder, + to add</p>
+                </div>
+                {WIDGET_REGISTRY.map(w => {
+                    const isAdded = editWidgetIds.includes(w.id);
+                    return (
+                        <div key={w.id} className={`nc-edit-widget-option ${isAdded ? 'added' : ''}`}>
+                            <div className="nc-edit-widget-info">
+                                <Icon name={w.icon} size={16} />
+                                <div>
+                                    <div className="nc-edit-widget-name">{w.name}</div>
+                                    <div className="nc-edit-widget-desc">{w.description}</div>
+                                </div>
+                            </div>
+                            <button
+                                className={`nc-edit-add-btn ${isAdded ? 'added' : ''}`}
+                                onClick={() => isAdded ? removeWidget(w.id) : addWidget(w.id)}
+                            >
+                                {isAdded ? <><Icon name="check" size={12} /> Added</> : <><Icon name="plus" size={12} /> Add</>}
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }, [editing, editWidgetIds, setOverrideContent]);
+
     if (loading) {
         return <AppLayout title="Nerve Center"><div className="loading-spinner" /></AppLayout>;
     }
 
-    // ── Edit Mode: Widget Picker Sidebar ──
-    if (editing) {
-        return (
-            <div className="nc-edit-layout">
-                {/* Widget Picker Sidebar */}
-                <aside className="nc-edit-sidebar">
-                    <div className="nc-edit-sidebar-header">
-                        <h2>Available Widgets</h2>
-                        <p>Drag to reorder, click + to add</p>
-                    </div>
-                    <div className="nc-edit-sidebar-list">
-                        {WIDGET_REGISTRY.map(w => {
-                            const isAdded = editWidgetIds.includes(w.id);
-                            return (
-                                <div key={w.id} className={`nc-edit-widget-option ${isAdded ? 'added' : ''}`}>
-                                    <div className="nc-edit-widget-info">
-                                        <Icon name={w.icon} size={16} />
-                                        <div>
-                                            <div className="nc-edit-widget-name">{w.name}</div>
-                                            <div className="nc-edit-widget-desc">{w.description}</div>
-                                        </div>
-                                    </div>
-                                    <button
-                                        className={`nc-edit-add-btn ${isAdded ? 'added' : ''}`}
-                                        onClick={() => isAdded ? removeWidget(w.id) : addWidget(w.id)}
-                                    >
-                                        {isAdded ? <><Icon name="check" size={12} /> Added</> : <><Icon name="plus" size={12} /> Add</>}
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </aside>
-
-                {/* Main Edit Area */}
-                <main className="nc-edit-main">
-                    <div className="nc-edit-topbar">
-                        <h1>Editing Nerve Center</h1>
-                        <button className="btn btn-success nc-save-btn" onClick={saveLayout_}>
-                            <Icon name="save" size={14} /> Save Layout
-                        </button>
-                    </div>
-
-                    <div className="nc-widget-grid editing">
-                        {editWidgetIds.map((wId, index) => {
-                            const meta = WIDGET_REGISTRY.find(w => w.id === wId);
-                            if (!meta) return null;
-                            return (
-                                <div
-                                    key={wId}
-                                    className="nc-widget-card edit-mode"
-                                    draggable
-                                    onDragStart={() => handleDragStart(index)}
-                                    onDragOver={(e) => handleDragOver(e, index)}
-                                    onDrop={handleDrop}
-                                    onDragEnd={() => { dragItem.current = null; dragOverItem.current = null; }}
-                                >
-                                    <div className="nc-widget-header">
-                                        <div className="nc-widget-drag-handle">
-                                            <Icon name="menu" size={14} />
-                                        </div>
-                                        <div className="nc-widget-title">
-                                            <Icon name={meta.icon} size={14} />
-                                            {meta.name}
-                                        </div>
-                                        <button className="nc-widget-close" onClick={() => removeWidget(wId)}>
-                                            <Icon name="close" size={14} />
-                                        </button>
-                                    </div>
-                                    <div className="nc-widget-preview">
-                                        {renderWidget(wId)}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        {editWidgetIds.length === 0 && (
-                            <div className="nc-empty-edit">
-                                <Icon name="plus" size={32} />
-                                <p>Add widgets from the sidebar</p>
-                            </div>
-                        )}
-                    </div>
-                </main>
-            </div>
-        );
-    }
-
-    // ── Normal View ──
     return (
         <AppLayout title="Nerve Center">
             <div className="nc-topbar">
                 <div className="nc-topbar-left">
-                    <h2 className="nc-title">Nerve Center</h2>
+                    <h2 className="nc-title">{editing ? 'Editing Nerve Center' : 'Nerve Center'}</h2>
                 </div>
-                <button className="btn btn-ghost nc-edit-btn" onClick={enterEditMode}>
-                    <Icon name="edit" size={14} /> Edit
-                </button>
+                {editing ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn btn-ghost" onClick={cancelEdit} style={{ fontSize: '0.8rem' }}>
+                            Cancel
+                        </button>
+                        <button className="btn btn-success nc-save-btn" onClick={saveAndExit}>
+                            <Icon name="save" size={14} /> Save Layout
+                        </button>
+                    </div>
+                ) : (
+                    <button className="btn btn-ghost nc-edit-btn" onClick={enterEditMode}>
+                        <Icon name="edit" size={14} /> Edit
+                    </button>
+                )}
             </div>
 
-            <div className="nc-widget-grid">
-                {currentWidgets.map(wId => {
+            <div className={`nc-widget-grid ${editing ? 'editing' : ''}`}>
+                {currentWidgets.map((wId, index) => {
                     const meta = WIDGET_REGISTRY.find(w => w.id === wId);
                     if (!meta) return null;
+                    const isDragOver = editing && dragOverIndex === index;
                     return (
-                        <div key={wId} className="nc-widget-card">
+                        <div
+                            key={wId}
+                            className={`nc-widget-card ${editing ? 'edit-mode' : ''} ${isDragOver ? 'drop-target' : ''}`}
+                            draggable={editing}
+                            onDragStart={editing ? (e) => handleDragStart(e, index) : undefined}
+                            onDragOver={editing ? (e) => handleDragOver(e, index) : undefined}
+                            onDrop={editing ? handleDrop : undefined}
+                            onDragEnd={editing ? handleDragEnd : undefined}
+                        >
                             <div className="nc-widget-header">
+                                {editing && (
+                                    <div className="nc-widget-drag-handle">
+                                        <Icon name="menu" size={14} />
+                                    </div>
+                                )}
                                 <div className="nc-widget-title">
                                     <Icon name={meta.icon} size={14} />
                                     {meta.name}
                                 </div>
+                                {editing && (
+                                    <button className="nc-widget-close" onClick={() => removeWidget(wId)}>
+                                        <Icon name="close" size={14} />
+                                    </button>
+                                )}
                             </div>
-                            {renderWidget(wId)}
+                            {editing ? (
+                                <div className="nc-widget-preview">
+                                    {renderWidget(wId)}
+                                </div>
+                            ) : (
+                                renderWidget(wId)
+                            )}
                         </div>
                     );
                 })}
+                {editing && editWidgetIds.length === 0 && (
+                    <div className="nc-empty-edit">
+                        <Icon name="plus" size={32} />
+                        <p>Add widgets from the sidebar</p>
+                    </div>
+                )}
             </div>
         </AppLayout>
     );

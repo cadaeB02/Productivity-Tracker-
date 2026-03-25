@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { useCompany } from '@/components/CompanyContext';
+import { useSidebarOverride } from '@/components/SidebarOverrideContext';
 import Icon from '@/components/Icon';
 
 const NAV_ITEMS = [
@@ -26,6 +27,7 @@ export default function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
     const { companies, activeCompanyId, activeCompany, setActiveCompanyId, setShowSwitcher } = useCompany();
+    const { overrideContent } = useSidebarOverride();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -123,19 +125,23 @@ export default function Sidebar() {
                     )}
                 </div>
 
-                <nav className="sidebar-nav">
-                    {NAV_ITEMS.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`nav-link ${pathname === item.href ? 'active' : ''}`}
-                            onClick={() => setMobileOpen(false)}
-                        >
-                            <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
-                            {item.label}
-                        </Link>
-                    ))}
-                </nav>
+                {overrideContent ? (
+                    overrideContent
+                ) : (
+                    <nav className="sidebar-nav">
+                        {NAV_ITEMS.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`nav-link ${pathname === item.href ? 'active' : ''}`}
+                                onClick={() => setMobileOpen(false)}
+                            >
+                                <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
+                                {item.label}
+                            </Link>
+                        ))}
+                    </nav>
+                )}
 
                 <div className="sidebar-footer">
                     <div className="sidebar-user">

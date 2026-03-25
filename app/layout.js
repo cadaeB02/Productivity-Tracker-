@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { CompanyProvider } from '@/components/CompanyContext';
 import CompanySwitcher from '@/components/CompanySwitcher';
 import PersistentLayout from '@/components/PersistentLayout';
+import { SidebarOverrideProvider } from '@/components/SidebarOverrideContext';
 
 export const metadata = {
     title: 'HoldCo OS — Productivity Tracker',
@@ -32,9 +33,11 @@ export default function RootLayout({ children }) {
                 <ThemeProvider>
                     <AuthProvider>
                         <CompanyProvider>
-                            <PersistentLayout>
-                                {children}
-                            </PersistentLayout>
+                            <SidebarOverrideProvider>
+                                <PersistentLayout>
+                                    {children}
+                                </PersistentLayout>
+                            </SidebarOverrideProvider>
                             <CompanySwitcher />
                         </CompanyProvider>
                     </AuthProvider>
