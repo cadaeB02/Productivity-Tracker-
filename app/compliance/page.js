@@ -63,6 +63,13 @@ export default function CompliancePage() {
     const [transfers, setTransfers] = useState([]);
     const transferFileRef = useRef(null);
 
+    // Tech Stack
+    const [techStack, setTechStack] = useState([]);
+    const [showTechForm, setShowTechForm] = useState(false);
+    const [editingTechIdx, setEditingTechIdx] = useState(null);
+    const [techForm, setTechForm] = useState({ name: '', url: '', category: 'Other', email: '', notes: '' });
+    const TECH_CATEGORIES = ['Hosting', 'Database', 'Auth', 'Domain', 'Payment', 'Analytics', 'CI/CD', 'Communication', 'Design', 'Other'];
+
     const loadData = useCallback(async () => {
         try {
             const c = await getCompanies();
@@ -83,6 +90,7 @@ export default function CompliancePage() {
                         registered_agent: company.registered_agent || '',
                         domains: Array.isArray(company.domains) ? company.domains.join(', ') : (company.domains || ''),
                     });
+                    setTechStack(Array.isArray(company.tech_stack) ? company.tech_stack : []);
                 }
             }
         } catch (err) {
@@ -468,6 +476,124 @@ export default function CompliancePage() {
                             <div style={{ marginTop: '12px', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-elevated)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                 <Icon name="info" size={12} className="icon-inline" /> Items marked AUTO are checked based on your entity information above.
                             </div>
+                        </div>
+
+                        {/* Tech Stack */}
+                        <div className="card" style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                    <Icon name="settings" size={16} /> Tech Stack
+                                </h3>
+                                <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => { setShowTechForm(!showTechForm); if (showTechForm) { setTechForm({ name: '', url: '', category: 'Other', email: '', notes: '' }); setEditingTechIdx(null); } }}
+                                >
+                                    <Icon name="plus" size={12} /> {showTechForm ? 'Cancel' : 'Add Service'}
+                                </button>
+                            </div>
+
+                            {showTechForm && (
+                                <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', marginBottom: '12px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                        <div className="input-group">
+                                            <label>Service Name</label>
+                                            <input className="input" placeholder="e.g. Supabase" value={techForm.name} onChange={(e) => setTechForm(f => ({ ...f, name: e.target.value }))} />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>Category</label>
+                                            <select className="input" value={techForm.category} onChange={(e) => setTechForm(f => ({ ...f, category: e.target.value }))}>
+                                                {TECH_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="input-group">
+                                            <label>URL</label>
+                                            <input className="input" placeholder="https://..." value={techForm.url} onChange={(e) => setTechForm(f => ({ ...f, url: e.target.value }))} />
+                                        </div>
+                                        <div className="input-group">
+                                            <label>Associated Email</label>
+                                            <input className="input" type="email" placeholder="account@email.com" value={techForm.email} onChange={(e) => setTechForm(f => ({ ...f, email: e.target.value }))} />
+                                        </div>
+                                    </div>
+                                    <div className="input-group" style={{ marginBottom: '10px' }}>
+                                        <label>Notes</label>
+                                        <input className="input" placeholder="API keys, plan tier, etc." value={techForm.notes} onChange={(e) => setTechForm(f => ({ ...f, notes: e.target.value }))} />
+                                    </div>
+                                    <button className="btn btn-primary btn-sm" onClick={async () => {
+                                        if (!techForm.name.trim()) return;
+                                        const updated = [...techStack];
+                                        if (editingTechIdx !== null) {
+                                            updated[editingTechIdx] = { ...techForm };
+                                        } else {
+                                            updated.push({ ...techForm });
+                                        }
+                                        try {
+                                            await updateCompany(activeCompanyId, { tech_stack: updated });
+                                            setTechStack(updated);
+                                            setTechForm({ name: '', url: '', category: 'Other', email: '', notes: '' });
+                                            setShowTechForm(false);
+                                            setEditingTechIdx(null);
+                                        } catch (err) {
+                                            console.error('Failed to save tech stack', err);
+                                        }
+                                    }}>
+                                        <Icon name="save" size={12} /> {editingTechIdx !== null ? 'Update' : 'Add'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {techStack.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                    No services tracked yet. Add your hosting, databases, auth, and tools.
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {techStack.map((entry, idx) => (
+                                        <div key={idx} style={{
+                                            display: 'flex', alignItems: 'center', gap: '12px',
+                                            padding: '10px 12px', borderRadius: '8px',
+                                            background: 'var(--bg-elevated)',
+                                            border: '1px solid var(--border-subtle)',
+                                        }}>
+                                            <span style={{
+                                                fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px',
+                                                borderRadius: '999px', background: 'rgba(99,102,241,0.12)',
+                                                color: 'var(--color-accent)', textTransform: 'uppercase', flexShrink: 0,
+                                            }}>{entry.category}</span>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                                                    {entry.name}
+                                                    {entry.url && (
+                                                        <a href={entry.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>↗</a>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {entry.email && <span>{entry.email}</span>}
+                                                    {entry.email && entry.notes && <span> • </span>}
+                                                    {entry.notes && <span>{entry.notes}</span>}
+                                                </div>
+                                            </div>
+                                            <button className="btn-icon" title="Edit" onClick={() => {
+                                                setTechForm({ ...entry });
+                                                setEditingTechIdx(idx);
+                                                setShowTechForm(true);
+                                            }}>
+                                                <Icon name="edit" size={12} />
+                                            </button>
+                                            <button className="btn-icon" title="Delete" onClick={async () => {
+                                                const updated = techStack.filter((_, i) => i !== idx);
+                                                try {
+                                                    await updateCompany(activeCompanyId, { tech_stack: updated });
+                                                    setTechStack(updated);
+                                                } catch (err) {
+                                                    console.error('Failed to delete tech stack entry', err);
+                                                }
+                                            }}>
+                                                <Icon name="trash" size={12} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Equity / Ownership */}

@@ -4,3 +4,7 @@
 
 ALTER TABLE companies 
 ADD COLUMN IF NOT EXISTS paycheck_delay_days integer DEFAULT 6;
+
+-- Tech stack: array of service objects stored as JSONB
+ALTER TABLE companies 
+ADD COLUMN IF NOT EXISTS tech_stack jsonb DEFAULT '[]'::jsonb;
