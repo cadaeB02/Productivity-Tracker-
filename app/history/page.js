@@ -17,6 +17,43 @@ import {
 } from '@/lib/store';
 import { formatDuration, formatDurationShort, formatDate, formatTime, getRelativeDate } from '@/lib/utils';
 
+// Live timer component for active sessions
+function LiveDuration({ session }) {
+    const [elapsed, setElapsed] = useState(0);
+    const isActive = !session.end_time;
+
+    useEffect(() => {
+        if (!isActive) return;
+        const tick = () => {
+            const start = new Date(session.start_time).getTime();
+            const pausedDur = (session.paused_duration || 0) * 1000;
+            if (session.paused_at) {
+                setElapsed(Math.floor((new Date(session.paused_at).getTime() - start - pausedDur) / 1000));
+            } else {
+                setElapsed(Math.floor((Date.now() - start - pausedDur) / 1000));
+            }
+        };
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [isActive, session.start_time, session.paused_at, session.paused_duration]);
+
+    if (!isActive) {
+        return <span>{formatDurationShort(session.duration || 0)}</span>;
+    }
+
+    return (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{
+                width: '6px', height: '6px', borderRadius: '50%',
+                backgroundColor: session.paused_at ? '#f59e0b' : '#22c55e',
+                animation: session.paused_at ? 'none' : 'pulse-badge 2s ease-in-out infinite',
+            }} />
+            {formatDurationShort(elapsed)}
+        </span>
+    );
+}
+
 export default function HistoryPage() {
     const { activeCompanyId } = useCompany();
     const [sessions, setSessions] = useState([]);
@@ -199,6 +236,7 @@ export default function HistoryPage() {
                     <div key={date} style={{ marginBottom: '24px' }}>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px', paddingLeft: '4px' }}>
                             {date} — {formatDurationShort(dateSessions.reduce((sum, s) => sum + (s.duration || 0), 0))} total
+                            {dateSessions.some(s => !s.end_time) && <span style={{ color: 'var(--color-success)', fontSize: '0.7rem', marginLeft: '6px' }}>(active)</span>}
                         </div>
                         <div className="session-list">
                             {dateSessions.map((session) => (
@@ -225,7 +263,7 @@ export default function HistoryPage() {
                                         )}
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <div className="session-duration">{formatDurationShort(session.duration)}</div>
+                                        <div className="session-duration"><LiveDuration session={session} /></div>
                                         <div className="session-time">
                                             {formatTime(session.start_time)}
                                             {session.end_time && ` — ${formatTime(session.end_time)}`}

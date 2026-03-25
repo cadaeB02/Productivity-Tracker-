@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { generateSessionSummary } from '@/lib/gemini';
-import { updateSessionAISummary, endSession } from '@/lib/store';
+import { updateSessionAISummary, endSession, deleteSession } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
 import Icon from '@/components/Icon';
 
@@ -67,6 +67,17 @@ export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessio
     const handleDone = () => {
         onSaved?.();
         onClose(false);
+    };
+
+    const handleDeleteSession = async () => {
+        if (!confirm('Delete this session entirely? This cannot be undone.')) return;
+        try {
+            await deleteSession(session.id);
+            onSaved?.();
+            onClose(false);
+        } catch (err) {
+            console.error('Failed to delete session:', err);
+        }
     };
 
     return (
@@ -144,24 +155,33 @@ export default function ClockOutModal({ session, onClose, onSaved, hasMoreSessio
                             />
                         </div>
 
-                        <div className="modal-actions">
-                            <button className="btn btn-ghost" onClick={handleSkip}>
-                                {hasMoreSessions ? 'Skip for now' : 'Skip'}
-                            </button>
+                        <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
                             <button
-                                className="btn btn-primary"
-                                onClick={handleSubmit}
-                                disabled={loading}
+                                className="btn btn-ghost"
+                                style={{ color: 'var(--color-danger)', fontSize: '0.8rem' }}
+                                onClick={handleDeleteSession}
                             >
-                                {loading ? (
-                                    <>
-                                        <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
-                                        AI Processing...
-                                    </>
-                                ) : (
-                                    <><Icon name="sparkle" size={14} /> Save & Get AI Summary</>
-                                )}
+                                <Icon name="trash" size={14} /> Delete Session
                             </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-ghost" onClick={handleSkip}>
+                                    {hasMoreSessions ? 'Skip for now' : 'Skip'}
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSubmit}
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                                            AI Processing...
+                                        </>
+                                    ) : (
+                                        <><Icon name="sparkle" size={14} /> Save & Get AI Summary</>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </>
                 ) : (
