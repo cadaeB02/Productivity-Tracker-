@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, getCompanies, toggleDocumentFlag } from '@/lib/store';
+import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, getCompanies, toggleDocumentFlag, getTransactions } from '@/lib/store';
 
 const DOC_CATEGORIES = [
     { key: 'all', label: 'All Files', icon: 'folder' },
@@ -48,6 +48,10 @@ export default function FilingPage() {
     const [uploadForm, setUploadForm] = useState({ category: 'general', description: '', company_id: '' });
     const fileInputRef = useRef(null);
     const [docCounts, setDocCounts] = useState({});
+    const [previewDoc, setPreviewDoc] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [linkedTransaction, setLinkedTransaction] = useState(null);
 
     const loadDocs = useCallback(async () => {
         try {
@@ -144,6 +148,36 @@ export default function FilingPage() {
         } catch (err) {
             console.error('Flag failed:', err);
         }
+    };
+
+    const handlePreview = async (doc) => {
+        setPreviewDoc(doc);
+        setPreviewLoading(true);
+        setLinkedTransaction(null);
+        try {
+            const url = await getDocumentDownloadUrl(doc.file_url);
+            setPreviewUrl(url);
+        } catch (err) {
+            console.error('Preview URL failed:', err);
+            setPreviewUrl(null);
+        }
+        // Fetch linked transaction if present
+        if (doc.linked_type === 'transaction' && doc.linked_id) {
+            try {
+                const allTxns = await getTransactions({});
+                const txn = allTxns.find(t => t.id === doc.linked_id);
+                if (txn) setLinkedTransaction(txn);
+            } catch (err) {
+                console.error('Linked transaction lookup failed:', err);
+            }
+        }
+        setPreviewLoading(false);
+    };
+
+    const closePreview = () => {
+        setPreviewDoc(null);
+        setPreviewUrl(null);
+        setLinkedTransaction(null);
     };
 
     const companyMap = {};
@@ -288,7 +322,7 @@ export default function FilingPage() {
                                     <Icon name={fileIcon(doc.file_type)} size={20} />
                                 </div>
                                 <div className="filing-row-info">
-                                    <div className="filing-row-name">{doc.file_name}</div>
+                                    <div className="filing-row-name" style={{ cursor: 'pointer' }} onClick={() => handlePreview(doc)}>{doc.file_name}</div>
                                     <div className="filing-row-meta">
                                         {formatDate(doc.created_at)}
                                         {doc.description && <> &middot; {doc.description}</>}
@@ -314,6 +348,9 @@ export default function FilingPage() {
                                     >
                                         <Icon name={doc.flagged ? 'flag-filled' : 'flag'} size={14} />
                                     </button>
+                                    <button className="btn-icon" onClick={() => handlePreview(doc)} title="Preview">
+                                        <Icon name="eye" size={14} />
+                                    </button>
                                     <button className="btn-icon" onClick={() => handleDownload(doc)} title="Download">
                                         <Icon name="download" size={14} />
                                     </button>
@@ -324,6 +361,105 @@ export default function FilingPage() {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Preview Modal */}
+            {previewDoc && (
+                <div className="modal-overlay" onClick={closePreview}>
+                    <div className="modal-content" style={{ maxWidth: '800px', width: '90vw', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>{previewDoc.file_name}</h3>
+                            <button className="btn-icon" onClick={closePreview}><Icon name="close" size={18} /></button>
+                        </div>
+
+                        {previewLoading ? (
+                            <div style={{ textAlign: 'center', padding: '40px' }}><div className="loading-spinner" /></div>
+                        ) : (
+                            <>
+                                {/* Receipt Image */}
+                                {previewUrl && previewDoc.file_type?.includes('image') ? (
+                                    <div style={{ textAlign: 'center', marginBottom: '16px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
+                                        <img
+                                            src={previewUrl}
+                                            alt={previewDoc.file_name}
+                                            style={{ maxWidth: '100%', maxHeight: '50vh', borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
+                                        />
+                                    </div>
+                                ) : previewUrl && previewDoc.file_type?.includes('pdf') ? (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <iframe src={previewUrl} style={{ width: '100%', height: '50vh', border: 'none', borderRadius: 'var(--radius-md)' }} />
+                                    </div>
+                                ) : previewUrl ? (
+                                    <div style={{ textAlign: 'center', padding: '24px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
+                                        <Icon name="folder" size={48} />
+                                        <p style={{ marginTop: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Preview not available for this file type</p>
+                                    </div>
+                                ) : null}
+
+                                {/* Document Details */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</div>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{previewDoc.category}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Uploaded</div>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{formatDate(previewDoc.created_at)}</div>
+                                    </div>
+                                    {previewDoc.description && (
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</div>
+                                            <div style={{ fontSize: '0.85rem' }}>{previewDoc.description}</div>
+                                        </div>
+                                    )}
+                                    {!activeCompanyId && companyMap[previewDoc.company_id] && (
+                                        <div>
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Company</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
+                                                <span className="color-dot" style={{ backgroundColor: companyMap[previewDoc.company_id].color, width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block' }} />
+                                                {companyMap[previewDoc.company_id].name}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Linked Transaction */}
+                                {linkedTransaction && (
+                                    <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '14px', border: '1px solid var(--border-subtle)' }}>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Linked Transaction</div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{linkedTransaction.description}</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                    {formatDate(linkedTransaction.date + 'T00:00:00')} &middot; {linkedTransaction.category}
+                                                    {linkedTransaction.is_recurring && <span style={{ marginLeft: '6px', padding: '1px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 600, background: 'rgba(139,92,246,0.15)', color: 'var(--color-accent)' }}>RECURRING</span>}
+                                                </div>
+                                            </div>
+                                            <div style={{
+                                                fontSize: '1.1rem',
+                                                fontWeight: 800,
+                                                color: linkedTransaction.type === 'expense' ? 'var(--color-danger)' : 'var(--color-success)',
+                                            }}>
+                                                {linkedTransaction.type === 'expense' ? '-' : '+'}
+                                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(linkedTransaction.amount)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Actions */}
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                                    <button className="btn btn-ghost" onClick={() => { handleDownload(previewDoc); }}>
+                                        <Icon name="download" size={14} /> Download
+                                    </button>
+                                    <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={() => { handleDelete(previewDoc); closePreview(); }}>
+                                        <Icon name="trash" size={14} /> Delete
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
         </AppLayout>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions, getAllProjects } from '@/lib/store';
+import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions, getAllProjects, uploadDocument } from '@/lib/store';
 
 const EXPENSE_CATEGORIES = ['Operations', 'Software', 'Marketing', 'Legal', 'Payroll', 'Supplies', 'Travel', 'Other'];
 const REVENUE_CATEGORIES = ['Services', 'Product Sales', 'Consulting', 'Contract', 'Paycheck', 'Recurring', 'Other'];
@@ -266,8 +266,9 @@ export default function TreasuryPage() {
         if (selected.length === 0) return;
         setScanSaving(true);
         try {
+            const savedTxns = [];
             for (const item of selected) {
-                await addTransaction({
+                const txn = await addTransaction({
                     type: item.type === 'revenue' ? 'revenue' : 'expense',
                     amount: parseFloat(item.amount) || 0,
                     description: `${item.vendor || ''} — ${item.description || ''}`.trim(),
@@ -276,7 +277,29 @@ export default function TreasuryPage() {
                     date: item.date || new Date().toISOString().split('T')[0],
                     is_recurring: item.is_recurring || false,
                 });
+                savedTxns.push(txn);
             }
+
+            // Upload the receipt image to Filing for each saved transaction
+            if (scanFile && savedTxns.length > 0) {
+                for (const txn of savedTxns) {
+                    try {
+                        const receiptName = `receipt-${txn.description?.replace(/[^a-zA-Z0-9]/g, '-')?.substring(0, 40) || 'scan'}-${txn.id.substring(0, 8)}.${scanFile.name.split('.').pop() || 'jpg'}`;
+                        const receiptFile = new File([scanFile], receiptName, { type: scanFile.type });
+                        await uploadDocument({
+                            file: receiptFile,
+                            company_id: txn.company_id,
+                            category: 'receipt',
+                            description: `${txn.description} — ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(txn.amount)}`,
+                            linked_type: 'transaction',
+                            linked_id: txn.id,
+                        });
+                    } catch (uploadErr) {
+                        console.error('Receipt upload to filing failed:', uploadErr);
+                    }
+                }
+            }
+
             setScanSaved(true);
             loadData();
         } catch (err) {
