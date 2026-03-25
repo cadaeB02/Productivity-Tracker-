@@ -20,7 +20,7 @@ export async function POST(request) {
         const base64 = Buffer.from(bytes).toString('base64');
         const mimeType = file.type || 'image/jpeg';
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
         const prompt = `Analyze this document (which may be a single receipt, an invoice, or a multi-page bank statement) and extract all financial transactions or notable items.
 
@@ -29,14 +29,16 @@ Return an ARRAY of JSON objects. Even if there is only 1 item, return it inside 
 For each item found, determine its type:
 1. "expense": Money going out (purchases, fees, bills).
 2. "revenue": Money coming in (deposits, payouts, sales).
+3. "note": General information, reminders, or unstructured text.
+4. "goal": Any financial targets or budgets mentioned.
 
 For each object in the array, strictly follow this JSON structure:
 {
-    "type": "expense" | "revenue",
+    "type": "expense" | "revenue" | "note" | "goal",
     "vendor": "Store/Company/Entity name (if applicable)",
     "amount": total amount as a number (no currency symbol, use 0 if none),
     "date": "YYYY-MM-DD format (infer year if missing based on document context, or use current year)",
-    "category": one of ["Food & Dining", "Software & Tools", "Office", "Travel", "Gas & Auto", "Shopping", "Entertainment", "Utilities", "Marketing", "Contractors", "Paycheck", "Other"] (try your best to categorize),
+    "category": one of ["Food & Dining", "Software & Tools", "Office", "Travel", "Gas & Auto", "Shopping", "Entertainment", "Utilities", "Marketing", "Contractors", "Other"] (try your best to categorize expenses),
     "description": "A short summary of what this item is (e.g., 'Office Supplies' or 'Client Payment')",
     "tax": tax amount as number or null,
     "confidence": a number 0-100 indicating your confidence in extracting this specific row,
@@ -46,7 +48,8 @@ For each object in the array, strictly follow this JSON structure:
 
 Important Rules:
 - If reading a bank statement with 45 rows, return an array of 45 objects.
-- If reading a single receipt or invoice, consolidate into ONE single main expense/revenue object using the grand total amount.
+- If reading a single receipt or invoice (like a restaurant bill or software subscription), DO NOT create separate expenses for sub-totals, taxes, tips, or the grand total. Consolidate the entire receipt into ONE single main expense object using the grand total amount.
+- Do NOT aggregate everything into one object IF the document is a bank statement or multi-purchase invoice containing genuinely distinct transactions.
 - Only respond with a valid JSON array, no markdown fences or explanation text.`;
 
         // Retry with exponential backoff for 429 rate limits

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
@@ -8,6 +8,38 @@ import { getCompanies, getTransactions, addTransaction, updateTransaction, delet
 
 const EXPENSE_CATEGORIES = ['Operations', 'Software', 'Marketing', 'Legal', 'Payroll', 'Supplies', 'Travel', 'Other'];
 const REVENUE_CATEGORIES = ['Services', 'Product Sales', 'Consulting', 'Contract', 'Recurring', 'Other'];
+const SCAN_CATEGORIES = ['Food & Dining', 'Software & Tools', 'Office', 'Travel', 'Gas & Auto', 'Shopping', 'Entertainment', 'Utilities', 'Marketing', 'Contractors', 'Paycheck', 'Other'];
+
+// ── Image Processing Helpers ──
+function compressImage(file, maxWidth = 1200, quality = 0.8) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob(blob => resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file), 'image/jpeg', quality);
+        };
+        img.src = URL.createObjectURL(file);
+    });
+}
+async function processImage(file) {
+    if (file.type === 'application/pdf') return file;
+    let processed = file;
+    // HEIC conversion
+    if (file.name?.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+        try {
+            const heic2any = (await import('heic2any')).default;
+            const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+            processed = new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+        } catch (e) { console.warn('HEIC conversion failed, using original', e); }
+    }
+    // Compress if > 1MB
+    if (processed.size > 1024 * 1024) processed = await compressImage(processed);
+    return processed;
+}
 
 function formatCurrency(amount) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -37,10 +69,24 @@ export default function TreasuryPage() {
 
     // Receipt scanner state
     const [showScanner, setShowScanner] = useState(false);
+    const [scanFile, setScanFile] = useState(null);
+    const [scanPreview, setScanPreview] = useState(null);
+    const [scanProcessing, setScanProcessing] = useState(false);
     const [scanning, setScanning] = useState(false);
     const [scannedItems, setScannedItems] = useState([]);
     const [scanError, setScanError] = useState('');
+    const [scanSaved, setScanSaved] = useState(false);
+    const [scanSaving, setScanSaving] = useState(false);
     const [dragOver, setDragOver] = useState(false);
+    const [scanManual, setScanManual] = useState(false);
+    const [manualForm, setManualForm] = useState({ vendor: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Other', type: 'expense', is_recurring: false });
+    const [showEditor, setShowEditor] = useState(false);
+    const [editorMessages, setEditorMessages] = useState([]);
+    const [editorInput, setEditorInput] = useState('');
+    const [editorSending, setEditorSending] = useState(false);
+    const scanFileInputRef = useRef(null);
+    const editorScrollRef = useRef(null);
+    const editorInputRef = useRef(null);
 
     const loadData = useCallback(async () => {
         try {
@@ -135,28 +181,39 @@ export default function TreasuryPage() {
         }
     };
 
-    // Receipt scanner handlers
-    const handleReceiptFile = async (file) => {
-        if (!file) return;
+    // ── Receipt Scanner Handlers ──
+    const handleScanFileSelect = async (selectedFile) => {
+        if (!selectedFile) return;
         setScanError('');
-        setScanning(true);
         setScannedItems([]);
-
+        setScanSaved(false);
+        setScanProcessing(true);
         try {
-            const formData = new FormData();
-            formData.append('receipt', file);
-            const res = await fetch('/api/analyze-receipt', { method: 'POST', body: formData });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Failed to analyze receipt');
-            const items = (json.data || []).map((item, idx) => ({
-                ...item,
-                _id: Date.now() + idx,
-                _approved: false,
-                company_id: activeCompanyId || '',
-            }));
-            setScannedItems(items);
+            const processed = await processImage(selectedFile);
+            setScanFile(processed);
+            setScanPreview(URL.createObjectURL(processed));
         } catch (err) {
-            setScanError(err.message);
+            setScanError(err.message || 'Failed to process image');
+        }
+        setScanProcessing(false);
+    };
+
+    const handleScanAnalyze = async () => {
+        if (!scanFile) return;
+        setScanning(true);
+        setScanError('');
+        setScannedItems([]);
+        try {
+            const fd = new FormData();
+            fd.append('receipt', scanFile);
+            const res = await fetch('/api/analyze-receipt', { method: 'POST', body: fd });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Analysis failed');
+            const dataArr = Array.isArray(json.data) ? json.data : [json.data];
+            setScannedItems(dataArr.map((item, idx) => ({ ...item, _id: Date.now() + idx, _selected: true, company_id: activeCompanyId || '' })));
+            setEditorMessages([{ role: 'assistant', content: `${dataArr.length} items ready for review. Tell me what to change — for example:\n• "Item #3 is recurring"\n• "Change items 5-8 to Travel"\n• "Delete item #2"` }]);
+        } catch (err) {
+            setScanError(err.message || 'Failed to analyze document');
         }
         setScanning(false);
     };
@@ -164,33 +221,106 @@ export default function TreasuryPage() {
     const handleDrop = (e) => {
         e.preventDefault();
         setDragOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) handleReceiptFile(file);
+        const f = e.dataTransfer.files[0];
+        if (f) handleScanFileSelect(f);
     };
 
-    const handleSaveScannedItem = async (item) => {
+    const updateScannedItem = (index, updates) => {
+        setScannedItems(prev => { const n = [...prev]; n[index] = { ...n[index], ...updates }; return n; });
+    };
+
+    const handleManualSubmit = () => {
+        if (!manualForm.vendor || !manualForm.amount) return;
+        setScannedItems([{
+            type: manualForm.type,
+            vendor: manualForm.vendor,
+            amount: parseFloat(manualForm.amount),
+            date: manualForm.date,
+            category: manualForm.category,
+            description: '',
+            tax: null,
+            confidence: 100,
+            is_recurring: manualForm.is_recurring,
+            _selected: true,
+            _id: Date.now(),
+            company_id: activeCompanyId || '',
+            card_last_four: null,
+        }]);
+    };
+
+    const handleSaveScanSelected = async () => {
+        const selected = scannedItems.filter(i => i._selected);
+        if (selected.length === 0) return;
+        setScanSaving(true);
         try {
-            await addTransaction({
-                type: item.type,
-                amount: parseFloat(item.amount) || 0,
-                description: `${item.vendor || ''} — ${item.description || ''}`.trim(),
-                category: item.category || 'Other',
-                company_id: item.company_id || activeCompanyId,
-                date: item.date || new Date().toISOString().split('T')[0],
-            });
-            setScannedItems(prev => prev.map(i => i._id === item._id ? { ...i, _approved: true } : i));
+            for (const item of selected) {
+                await addTransaction({
+                    type: item.type === 'revenue' ? 'revenue' : 'expense',
+                    amount: parseFloat(item.amount) || 0,
+                    description: `${item.vendor || ''} — ${item.description || ''}`.trim(),
+                    category: item.category || 'Other',
+                    company_id: item.company_id || activeCompanyId,
+                    date: item.date || new Date().toISOString().split('T')[0],
+                });
+            }
+            setScanSaved(true);
             loadData();
         } catch (err) {
-            console.error('Failed to save scanned item', err);
+            setScanError(err.message || 'Failed to save');
         }
+        setScanSaving(false);
     };
 
-    const handleSaveAllScanned = async () => {
-        const unsaved = scannedItems.filter(i => !i._approved);
-        for (const item of unsaved) {
-            await handleSaveScannedItem(item);
-        }
+    const resetScanner = () => {
+        setScanFile(null);
+        setScanPreview(null);
+        setScannedItems([]);
+        setScanError('');
+        setScanSaved(false);
+        setScanManual(false);
+        setShowEditor(false);
+        setEditorMessages([]);
+        if (scanFileInputRef.current) scanFileInputRef.current.value = '';
     };
+
+    // AI Receipt Editor chat
+    const sendEditorMessage = async () => {
+        if (!editorInput.trim() || editorSending) return;
+        const userMsg = { role: 'user', content: editorInput.trim() };
+        const newMsgs = [...editorMessages, userMsg];
+        setEditorMessages(newMsgs);
+        setEditorInput('');
+        setEditorSending(true);
+        try {
+            const res = await fetch('/api/receipt-editor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: newMsgs.map(m => ({ role: m.role, content: m.content })), items: scannedItems }),
+            });
+            const result = await res.json();
+            if (result.success && result.data) {
+                setEditorMessages(prev => [...prev, { role: 'assistant', content: result.data.message || 'Done!' }]);
+                if (result.data.updates && Array.isArray(result.data.updates)) {
+                    const updated = [...scannedItems];
+                    for (const u of result.data.updates) {
+                        if (u.index >= 0 && u.index < updated.length && u.changes) {
+                            updated[u.index] = { ...updated[u.index], ...u.changes };
+                        }
+                    }
+                    setScannedItems(updated);
+                }
+            } else {
+                setEditorMessages(prev => [...prev, { role: 'assistant', content: result.error || 'Something went wrong.' }]);
+            }
+        } catch {
+            setEditorMessages(prev => [...prev, { role: 'assistant', content: 'Connection error — please try again.' }]);
+        }
+        setEditorSending(false);
+    };
+
+    useEffect(() => {
+        if (editorScrollRef.current) editorScrollRef.current.scrollTop = editorScrollRef.current.scrollHeight;
+    }, [editorMessages]);
 
     // Calculate totals
     const totalRevenue = transactions.filter(t => t.type === 'revenue').reduce((s, t) => s + parseFloat(t.amount), 0);
@@ -256,135 +386,236 @@ export default function TreasuryPage() {
                 </div>
 
                 {/* Add Button + Scanner Button */}
-                <div style={{ marginBottom: '16px', display: 'flex', gap: '8px' }}>
+                <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setShowScanner(false); if (showForm) resetForm(); }}>
                         <Icon name="plus" size={14} /> {showForm ? 'Cancel' : 'Add Transaction'}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => { setShowScanner(!showScanner); setShowForm(false); }}>
+                    <button className="btn btn-secondary" onClick={() => { setShowScanner(!showScanner); setShowForm(false); if (showScanner) resetScanner(); }}>
                         <Icon name="search" size={14} /> {showScanner ? 'Close Scanner' : 'Scan Receipt'}
                     </button>
                 </div>
 
-                {/* Receipt Scanner */}
+                {/* ═══════════ RECEIPT SCANNER ═══════════ */}
                 {showScanner && (
                     <div className="card" style={{ marginBottom: '20px' }}>
-                        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Icon name="search" size={16} /> AI Receipt Scanner
-                        </h3>
-                        <div
-                            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                            onDragLeave={() => setDragOver(false)}
-                            onDrop={handleDrop}
-                            onClick={() => document.getElementById('receipt-upload')?.click()}
-                            style={{
-                                border: `2px dashed ${dragOver ? 'var(--color-accent)' : 'var(--border-subtle)'}`,
-                                borderRadius: 'var(--radius-md)',
-                                padding: '32px',
-                                textAlign: 'center',
-                                cursor: 'pointer',
-                                background: dragOver ? 'rgba(99,102,241,0.05)' : 'transparent',
-                                transition: 'all 0.2s',
-                                marginBottom: '12px',
-                            }}
-                        >
-                            {scanning ? (
-                                <div>
-                                    <div className="loading-spinner" style={{ margin: '0 auto 12px' }} />
-                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Analyzing receipt with AI...</p>
-                                </div>
-                            ) : (
-                                <div>
-                                    <Icon name="arrow-up" size={32} style={{ color: 'var(--text-muted)', marginBottom: '8px' }} />
-                                    <p style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.9rem' }}>Drop receipt image here</p>
-                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>or click to browse • supports JPG, PNG, PDF</p>
-                                </div>
-                            )}
-                            <input
-                                id="receipt-upload"
-                                type="file"
-                                accept="image/*,.pdf"
-                                style={{ display: 'none' }}
-                                onChange={(e) => handleReceiptFile(e.target.files?.[0])}
-                            />
+                        {/* Header + AI/Manual toggle */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                                <Icon name="search" size={16} /> Receipt Scanner
+                            </h3>
+                            <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: '8px', padding: '2px' }}>
+                                <button onClick={() => { setScanManual(false); setScannedItems([]); }} style={{
+                                    padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                    background: !scanManual ? 'var(--bg-primary)' : 'transparent',
+                                    color: !scanManual ? '#fff' : 'var(--text-muted)',
+                                }}>AI Scan</button>
+                                <button onClick={() => { setScanManual(true); setScannedItems([]); setScanFile(null); setScanPreview(null); }} style={{
+                                    padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                    background: scanManual ? 'var(--bg-primary)' : 'transparent',
+                                    color: scanManual ? '#fff' : 'var(--text-muted)',
+                                }}>Manual</button>
+                            </div>
                         </div>
 
-                        {scanError && (
-                            <div style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginBottom: '12px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)' }}>
-                                {scanError}
+                        {/* ── Manual Entry Form ── */}
+                        {scanManual && scannedItems.length === 0 && (
+                            <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', marginBottom: '12px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                    <div className="input-group"><label>Vendor</label><input className="input" placeholder="e.g. Google" value={manualForm.vendor} onChange={e => setManualForm(f => ({ ...f, vendor: e.target.value }))} /></div>
+                                    <div className="input-group"><label>Amount ($)</label><input className="input" type="number" step="0.01" placeholder="0.00" value={manualForm.amount} onChange={e => setManualForm(f => ({ ...f, amount: e.target.value }))} /></div>
+                                    <div className="input-group"><label>Date</label><input className="input" type="date" value={manualForm.date} onChange={e => setManualForm(f => ({ ...f, date: e.target.value }))} /></div>
+                                    <div className="input-group"><label>Category</label><select className="input" value={manualForm.category} onChange={e => setManualForm(f => ({ ...f, category: e.target.value }))}>{SCAN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                                    <button type="button" onClick={() => setManualForm(f => ({ ...f, type: 'expense' }))} className={`btn btn-sm ${manualForm.type === 'expense' ? 'btn-danger' : 'btn-secondary'}`}>
+                                        <Icon name="arrow-up" size={12} /> Expense
+                                    </button>
+                                    <button type="button" onClick={() => setManualForm(f => ({ ...f, type: 'revenue' }))} className={`btn btn-sm ${manualForm.type === 'revenue' ? 'btn-primary' : 'btn-secondary'}`}>
+                                        <Icon name="arrow-down" size={12} /> Revenue
+                                    </button>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', marginLeft: 'auto', cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={manualForm.is_recurring} onChange={e => setManualForm(f => ({ ...f, is_recurring: e.target.checked }))} /> Recurring
+                                    </label>
+                                </div>
+                                <button className="btn btn-primary" disabled={!manualForm.vendor || !manualForm.amount} onClick={handleManualSubmit}>
+                                    <Icon name="check" size={14} /> Review Entry
+                                </button>
                             </div>
                         )}
 
-                        {/* Scanned Results */}
+                        {/* ── AI Upload Zone ── */}
+                        {!scanManual && (
+                            <>
+                                <div
+                                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                                    onDragLeave={() => setDragOver(false)}
+                                    onDrop={handleDrop}
+                                    onClick={() => !scanPreview && scanFileInputRef.current?.click()}
+                                    style={{
+                                        border: `2px dashed ${dragOver ? 'var(--color-accent)' : 'var(--border-subtle)'}`,
+                                        borderRadius: 'var(--radius-md)', padding: scanPreview ? '16px' : '32px',
+                                        textAlign: 'center', cursor: scanPreview ? 'default' : 'pointer',
+                                        background: dragOver ? 'rgba(99,102,241,0.05)' : 'transparent',
+                                        transition: 'all 0.2s', marginBottom: '12px',
+                                    }}
+                                >
+                                    {scanProcessing ? (
+                                        <div><div className="loading-spinner" style={{ margin: '0 auto 12px' }} /><p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Processing image...</p></div>
+                                    ) : scanPreview ? (
+                                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <img src={scanPreview} alt="Receipt" style={{ maxHeight: '200px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }} />
+                                            <button onClick={(e) => { e.stopPropagation(); resetScanner(); }} style={{
+                                                position: 'absolute', top: '-8px', right: '-8px', width: '24px', height: '24px',
+                                                borderRadius: '50%', background: 'var(--bg-primary)', color: '#fff', border: 'none',
+                                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem',
+                                            }}>✕</button>
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>{scanFile?.name} ({(scanFile?.size / 1024).toFixed(0)} KB)</p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <Icon name="arrow-up" size={32} style={{ color: 'var(--text-muted)', marginBottom: '8px' }} />
+                                            <p style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.9rem' }}>Drop receipt image here</p>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>or click to browse • JPG, PNG, PDF, HEIC</p>
+                                        </div>
+                                    )}
+                                    <input ref={scanFileInputRef} type="file" accept="image/*,.pdf,.heic" style={{ display: 'none' }} onChange={e => handleScanFileSelect(e.target.files?.[0])} />
+                                </div>
+
+                                {/* Analyze Button */}
+                                {scanFile && scannedItems.length === 0 && !scanning && (
+                                    <button className="btn btn-primary" style={{ width: '100%', marginBottom: '12px' }} onClick={handleScanAnalyze}>
+                                        <Icon name="search" size={14} /> Analyze Receipt
+                                    </button>
+                                )}
+
+                                {scanning && (
+                                    <div style={{ textAlign: 'center', padding: '20px', background: 'rgba(99,102,241,0.05)', borderRadius: 'var(--radius-md)', marginBottom: '12px' }}>
+                                        <div className="loading-spinner" style={{ margin: '0 auto 12px' }} />
+                                        <p style={{ fontWeight: 600, color: 'var(--color-accent)', fontSize: '0.85rem' }}>Analyzing with Gemini AI...</p>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Extracting vendor, amount, date, and category</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* Error */}
+                        {scanError && (
+                            <div style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginBottom: '12px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{scanError}</span>
+                                {!scanManual && <button className="btn-icon" onClick={() => { setScanError(''); handleScanAnalyze(); }}><Icon name="timer" size={14} /></button>}
+                            </div>
+                        )}
+
+                        {/* ══ Batch Results ══ */}
                         {scannedItems.length > 0 && (
                             <div>
+                                {/* Header row */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                    <h4 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-accent)' }}>
-                                        {scannedItems.length} item{scannedItems.length > 1 ? 's' : ''} found
-                                    </h4>
-                                    {scannedItems.some(i => !i._approved) && (
-                                        <button className="btn btn-primary btn-sm" onClick={handleSaveAllScanned}>
-                                            Save All to Treasury
-                                        </button>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Found {scannedItems.length} Items</h4>
+                                    {!scanSaved && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <button onClick={() => setScannedItems(prev => prev.map(i => ({ ...i, _selected: prev.some(x => !x._selected) })))} style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                                {scannedItems.some(x => !x._selected) ? 'Select All' : 'Deselect All'}
+                                            </button>
+                                            <button className="btn btn-primary btn-sm" disabled={scanSaving || scannedItems.filter(i => i._selected).length === 0} onClick={handleSaveScanSelected}>
+                                                {scanSaving ? '...' : <><Icon name="check" size={12} /> Save Selected ({scannedItems.filter(i => i._selected).length})</>}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
-                                {scannedItems.map((item) => (
+
+                                {/* Saved confirmation */}
+                                {scanSaved && (
+                                    <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(34,197,94,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '12px' }}>
+                                        <p style={{ color: 'var(--color-success)', fontWeight: 600 }}>✓ Saved {scannedItems.filter(i => i._selected).length} items to Treasury!</p>
+                                        <button onClick={resetScanner} style={{ fontSize: '0.8rem', color: 'var(--color-success)', background: 'none', border: 'none', cursor: 'pointer', marginTop: '4px' }}>Process another document</button>
+                                    </div>
+                                )}
+
+                                {/* Item cards */}
+                                {!scanSaved && scannedItems.map((item, index) => (
                                     <div key={item._id} style={{
-                                        padding: '12px',
-                                        border: `1px solid ${item._approved ? 'var(--color-success)' : 'var(--border-subtle)'}`,
-                                        borderRadius: 'var(--radius-md)',
-                                        marginBottom: '8px',
-                                        background: item._approved ? 'rgba(34,197,94,0.05)' : 'var(--bg-elevated)',
-                                        opacity: item._approved ? 0.7 : 1,
+                                        padding: '12px', marginBottom: '8px', borderRadius: 'var(--radius-md)',
+                                        border: `1px solid ${item._selected ? 'var(--color-accent)' : 'var(--border-subtle)'}`,
+                                        background: item._selected ? 'var(--bg-elevated)' : 'transparent',
+                                        opacity: item._selected ? 1 : 0.5, transition: 'all 0.15s',
                                     }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: 700,
-                                                    padding: '2px 8px',
-                                                    borderRadius: '999px',
-                                                    background: item.type === 'revenue' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                                                    color: item.type === 'revenue' ? 'var(--color-success)' : 'var(--color-danger)',
-                                                    textTransform: 'uppercase',
-                                                }}>
-                                                    {item.type}
-                                                </span>
-                                                <strong style={{ fontSize: '0.9rem' }}>{item.vendor || 'Unknown'}</strong>
+                                        {/* Checkbox + inline fields */}
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'start' }}>
+                                            <input type="checkbox" checked={item._selected || false} onChange={e => updateScannedItem(index, { _selected: e.target.checked })} style={{ marginTop: '4px', cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-accent)' }} />
+                                            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'auto 1fr 80px 110px', gap: '8px', alignItems: 'center' }}>
+                                                <select className="input" style={{ padding: '3px 6px', fontSize: '0.7rem', width: 'auto' }} value={item.type} onChange={e => updateScannedItem(index, { type: e.target.value })}>
+                                                    <option value="expense">Expense</option>
+                                                    <option value="revenue">Revenue</option>
+                                                </select>
+                                                <input className="input" style={{ padding: '3px 6px', fontSize: '0.8rem' }} value={item.vendor || ''} onChange={e => updateScannedItem(index, { vendor: e.target.value })} placeholder="Vendor" />
+                                                <input className="input" type="number" step="0.01" style={{ padding: '3px 6px', fontSize: '0.8rem' }} value={item.amount ?? ''} onChange={e => updateScannedItem(index, { amount: parseFloat(e.target.value) || 0 })} />
+                                                <input className="input" type="date" style={{ padding: '3px 6px', fontSize: '0.7rem' }} value={item.date || ''} onChange={e => updateScannedItem(index, { date: e.target.value })} />
                                             </div>
-                                            <strong style={{ fontSize: '1rem', color: item.type === 'revenue' ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                                                {formatCurrency(item.amount || 0)}
-                                            </strong>
                                         </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                                            {item.description} • {item.category} • {item.date}
-                                            {item.card_last_four && (<span style={{ marginLeft: '8px', padding: '1px 6px', background: 'rgba(99,102,241,0.15)', borderRadius: '4px', fontSize: '0.7rem', color: 'var(--color-accent)' }}>Card •••{item.card_last_four}</span>)}
-                                            {item.is_recurring && (<span style={{ marginLeft: '6px', padding: '1px 6px', background: 'rgba(234,179,8,0.15)', borderRadius: '4px', fontSize: '0.7rem', color: '#eab308' }}>Recurring</span>)}
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        {/* Description + meta row */}
+                                        <div style={{ marginLeft: '24px', marginTop: '6px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <input className="input" style={{ padding: '3px 6px', fontSize: '0.75rem', flex: 1, minWidth: '120px' }} value={item.description || ''} onChange={e => updateScannedItem(index, { description: e.target.value })} placeholder="Description" />
+                                            <select className="input" style={{ padding: '3px 6px', fontSize: '0.7rem', width: 'auto' }} value={item.category || 'Other'} onChange={e => updateScannedItem(index, { category: e.target.value })}>
+                                                {SCAN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
                                             {!activeCompanyId && (
-                                                <select
-                                                    className="input"
-                                                    style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto' }}
-                                                    value={item.company_id}
-                                                    onChange={(e) => setScannedItems(prev => prev.map(i => i._id === item._id ? { ...i, company_id: e.target.value } : i))}
-                                                >
-                                                    <option value="">Select company...</option>
+                                                <select className="input" style={{ padding: '3px 6px', fontSize: '0.7rem', width: 'auto' }} value={item.company_id} onChange={e => updateScannedItem(index, { company_id: e.target.value })}>
+                                                    <option value="">Company...</option>
                                                     {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                                 </select>
                                             )}
-                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                                                {item.confidence}% confidence
-                                            </span>
-                                            {!item._approved ? (
-                                                <button className="btn btn-primary btn-sm" onClick={() => handleSaveScannedItem(item)} disabled={!item.company_id}>
-                                                    <Icon name="check" size={12} /> Save
-                                                </button>
-                                            ) : (
-                                                <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600 }}>✓ Saved</span>
-                                            )}
+                                            {item.card_last_four && <span style={{ padding: '1px 6px', background: 'rgba(99,102,241,0.15)', borderRadius: '4px', fontSize: '0.65rem', color: 'var(--color-accent)', fontWeight: 600 }}>Card ••••{item.card_last_four}</span>}
+                                            {item.is_recurring && <span style={{ padding: '1px 6px', background: 'rgba(234,179,8,0.15)', borderRadius: '4px', fontSize: '0.65rem', color: '#eab308', fontWeight: 600 }}>Recurring</span>}
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{item.confidence}%</span>
                                         </div>
                                     </div>
                                 ))}
+
+                                {/* AI Receipt Editor */}
+                                {!scanSaved && scannedItems.length > 0 && (
+                                    <div style={{ marginTop: '12px' }}>
+                                        {!showEditor ? (
+                                            <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setShowEditor(true); setTimeout(() => editorInputRef.current?.focus(), 200); }}>
+                                                <Icon name="edit" size={14} /> Open Receipt Editor (AI)
+                                            </button>
+                                        ) : (
+                                            <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', overflow: 'hidden', height: '320px', display: 'flex', flexDirection: 'column' }}>
+                                                {/* Editor header */}
+                                                <div style={{ padding: '8px 12px', background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Receipt Editor • {scannedItems.length} items</span>
+                                                    <button onClick={() => setShowEditor(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
+                                                </div>
+                                                {/* Messages */}
+                                                <div ref={editorScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {editorMessages.map((msg, i) => (
+                                                        <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                                                            <div style={{
+                                                                maxWidth: '85%', padding: '8px 12px', borderRadius: '12px', fontSize: '0.8rem', whiteSpace: 'pre-wrap',
+                                                                background: msg.role === 'user' ? '#7c3aed' : 'var(--bg-elevated)',
+                                                                color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
+                                                            }}>{msg.content}</div>
+                                                        </div>
+                                                    ))}
+                                                    {editorSending && (
+                                                        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                                                            <div style={{ padding: '8px 12px', borderRadius: '12px', background: 'var(--bg-elevated)' }}>
+                                                                <div className="loading-spinner" style={{ width: '16px', height: '16px' }} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {/* Input */}
+                                                <div style={{ padding: '8px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: '6px' }}>
+                                                    <input ref={editorInputRef} className="input" style={{ flex: 1, padding: '6px 10px', fontSize: '0.8rem' }} value={editorInput} onChange={e => setEditorInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendEditorMessage(); } }} placeholder="Edit items in plain English..." disabled={editorSending} />
+                                                    <button className="btn btn-primary btn-sm" onClick={sendEditorMessage} disabled={editorSending || !editorInput.trim()}>
+                                                        <Icon name="arrow-right" size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
