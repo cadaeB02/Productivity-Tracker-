@@ -67,53 +67,144 @@ function formatDurationShort(totalSeconds) {
 // WIDGET COMPONENTS
 // ═══════════════════════════════════════
 
-function HoursByCompanyWidget({ sessions, companies }) {
+function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
     const [animated, setAnimated] = useState(false);
+    const [view, setView] = useState('company'); // 'company' | 'day' | 'summary'
 
     useEffect(() => {
+        setAnimated(false);
         const timer = setTimeout(() => setAnimated(true), 50);
         return () => clearTimeout(timer);
-    }, []);
+    }, [view, activeCompanyId]);
 
-    // Aggregate hours by company
-    const companyHours = {};
-    const companyColors = {};
-    sessions.forEach(s => {
-        const name = s.companies?.name || companies.find(c => c.id === s.company_id)?.name || 'Unknown';
-        const color = s.companies?.color || companies.find(c => c.id === s.company_id)?.color || '#6366f1';
-        companyHours[name] = (companyHours[name] || 0) + (s.duration || 0);
-        companyColors[name] = color;
-    });
+    // Filter by active company
+    const filtered = activeCompanyId
+        ? sessions.filter(s => s.company_id === activeCompanyId)
+        : sessions;
 
-    const entries = Object.entries(companyHours).sort((a, b) => b[1] - a[1]);
-    const maxSeconds = Math.max(...entries.map(e => e[1]), 1);
-
-    if (entries.length === 0) {
+    if (filtered.length === 0) {
         return <div className="nc-widget-body"><div className="nc-empty">No tracked time yet</div></div>;
     }
 
-    return (
-        <div className="nc-widget-body">
-            <div className="nc-bar-chart">
-                {entries.map(([name, seconds]) => {
-                    const pct = (seconds / maxSeconds) * 100;
-                    return (
+    // View tabs
+    const viewTabs = (
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+            {[
+                { key: 'company', label: 'By Company' },
+                { key: 'day', label: 'By Day' },
+                { key: 'summary', label: 'Summary' },
+            ].map(t => (
+                <button
+                    key={t.key}
+                    onClick={() => setView(t.key)}
+                    style={{
+                        fontSize: '0.6rem', fontWeight: 600, textTransform: 'uppercase',
+                        letterSpacing: '0.04em', padding: '2px 8px', borderRadius: '4px',
+                        border: '1px solid ' + (view === t.key ? 'var(--color-accent)' : 'var(--border-subtle)'),
+                        background: view === t.key ? 'rgba(139,92,246,0.1)' : 'transparent',
+                        color: view === t.key ? 'var(--color-accent)' : 'var(--text-muted)',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                >
+                    {t.label}
+                </button>
+            ))}
+        </div>
+    );
+
+    // ── By Company view ──
+    if (view === 'company') {
+        const companyHours = {};
+        const companyColors = {};
+        filtered.forEach(s => {
+            const name = s.companies?.name || companies.find(c => c.id === s.company_id)?.name || 'Unknown';
+            const color = s.companies?.color || companies.find(c => c.id === s.company_id)?.color || '#6366f1';
+            companyHours[name] = (companyHours[name] || 0) + (s.duration || 0);
+            companyColors[name] = color;
+        });
+        const entries = Object.entries(companyHours).sort((a, b) => b[1] - a[1]);
+        const maxSec = Math.max(...entries.map(e => e[1]), 1);
+
+        return (
+            <div className="nc-widget-body">
+                {viewTabs}
+                <div className="nc-bar-chart">
+                    {entries.map(([name, seconds]) => (
                         <div key={name} className="nc-bar-item">
                             <div className="nc-bar-value">{formatDurationShort(seconds)}</div>
                             <div className="nc-bar-track">
-                                <div
-                                    className="nc-bar-fill"
-                                    style={{
-                                        height: animated ? `${Math.max(pct, 4)}%` : '0%',
-                                        backgroundColor: companyColors[name],
-                                        transition: `height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)`,
-                                    }}
-                                />
+                                <div className="nc-bar-fill" style={{
+                                    height: animated ? `${Math.max((seconds / maxSec) * 100, 4)}%` : '0%',
+                                    backgroundColor: companyColors[name],
+                                    transition: 'height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                }} />
                             </div>
                             <div className="nc-bar-label">{name}</div>
                         </div>
-                    );
-                })}
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // ── By Day view ──
+    if (view === 'day') {
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayHours = [0, 0, 0, 0, 0, 0, 0];
+        filtered.forEach(s => {
+            const day = new Date(s.start_time).getDay();
+            dayHours[day] += s.duration || 0;
+        });
+        const maxDay = Math.max(...dayHours, 1);
+
+        return (
+            <div className="nc-widget-body">
+                {viewTabs}
+                <div className="nc-bar-chart">
+                    {dayNames.map((name, i) => (
+                        <div key={name} className="nc-bar-item">
+                            <div className="nc-bar-value">{dayHours[i] > 0 ? formatDurationShort(dayHours[i]) : ''}</div>
+                            <div className="nc-bar-track">
+                                <div className="nc-bar-fill" style={{
+                                    height: animated ? `${Math.max((dayHours[i] / maxDay) * 100, dayHours[i] > 0 ? 4 : 0)}%` : '0%',
+                                    backgroundColor: '#f59e0b',
+                                    transition: `height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.05}s`,
+                                }} />
+                            </div>
+                            <div className="nc-bar-label">{name}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // ── Summary view ──
+    const totalSec = filtered.reduce((s, x) => s + (x.duration || 0), 0);
+    const uniqueDays = new Set(filtered.map(s => new Date(s.start_time).toDateString())).size;
+    const avgPerDay = uniqueDays > 0 ? totalSec / uniqueDays : 0;
+    const avgSession = filtered.length > 0 ? totalSec / filtered.length : 0;
+
+    return (
+        <div className="nc-widget-body">
+            {viewTabs}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {[
+                    { label: 'Total Hours', value: formatDurationShort(totalSec) },
+                    { label: 'Total Sessions', value: filtered.length },
+                    { label: 'Avg / Day', value: formatDurationShort(Math.round(avgPerDay)) },
+                    { label: 'Avg Session', value: formatDurationShort(Math.round(avgSession)) },
+                    { label: 'Days Tracked', value: uniqueDays },
+                    { label: 'Companies', value: new Set(filtered.map(s => s.company_id)).size },
+                ].map(stat => (
+                    <div key={stat.label} style={{
+                        background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)',
+                        padding: '10px', textAlign: 'center',
+                    }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 800 }}>{stat.value}</div>
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '2px' }}>{stat.label}</div>
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -622,7 +713,7 @@ export default function DashboardPage() {
     const renderWidget = (widgetId) => {
         switch (widgetId) {
             case 'hours-by-company':
-                return <HoursByCompanyWidget sessions={sessions} companies={companies} />;
+                return <HoursByCompanyWidget sessions={sessions} companies={companies} activeCompanyId={activeCompanyId} />;
             case 'quick-notes':
                 return <QuickNotesWidget notes={notes} companies={companies} onAddNote={handleAddNote} onAssignCompany={handleAssignCompany} />;
             case 'active-timer':
