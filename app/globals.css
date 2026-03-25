@@ -4247,15 +4247,16 @@ textarea.input {
     gap: 8px;
     padding: 8px 10px;
     border-radius: var(--radius-sm);
-    background: var(--bg-elevated);
+    background: transparent;
     border: 1px solid var(--border-subtle);
     cursor: pointer;
     transition: all 0.15s;
     font-size: 0.78rem;
+    color: var(--text-primary);
 }
 .nc-timer-tile:hover {
     border-color: var(--color-accent);
-    background: rgba(139, 92, 246, 0.05);
+    background: rgba(139, 92, 246, 0.08);
 }
 .nc-timer-tile-name {
     flex: 1;
@@ -4542,13 +4543,4 @@ textarea.input {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 60px;
-}
-
-/* ── Dark Mode Widget Improvements ── */
-[data-theme="dark"] .nc-widget-card {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.08);
-}
-[data-theme="dark"] .nc-widget-card:hover {
-    border-color: rgba(255, 255, 255, 0.14);
 }
