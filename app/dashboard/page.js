@@ -179,18 +179,65 @@ function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
         );
     }
 
-    // ── By Day view (stacked company colors) ──
+    // ── By Day view (wall-clock time with company proportions) ──
     if (view === 'day') {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        // Aggregate per day per company
-        const dayCompanyData = dayNames.map(() => ({})); // [{companyId: seconds}, ...]
-        const dayTotals = [0, 0, 0, 0, 0, 0, 0];
+
+        // Group sessions by day of week
+        const daySessionGroups = dayNames.map(() => []);
         filtered.forEach(s => {
-            const day = new Date(s.start_time).getDay();
-            const cid = s.company_id || 'unknown';
-            dayCompanyData[day][cid] = (dayCompanyData[day][cid] || 0) + (s.duration || 0);
-            dayTotals[day] += s.duration || 0;
+            if (!s.start_time) return;
+            const start = new Date(s.start_time);
+            const end = s.end_time ? new Date(s.end_time) : new Date();
+            const day = start.getDay();
+            daySessionGroups[day].push({
+                start: start.getTime(),
+                end: end.getTime(),
+                companyId: s.company_id || 'unknown',
+            });
         });
+
+        // Merge overlapping intervals to get wall-clock time per day
+        const mergeIntervals = (intervals) => {
+            if (intervals.length === 0) return [];
+            const sorted = [...intervals].sort((a, b) => a.start - b.start);
+            const merged = [sorted[0]];
+            for (let i = 1; i < sorted.length; i++) {
+                const last = merged[merged.length - 1];
+                if (sorted[i].start <= last.end) {
+                    last.end = Math.max(last.end, sorted[i].end);
+                } else {
+                    merged.push({ ...sorted[i] });
+                }
+            }
+            return merged;
+        };
+
+        const dayTotals = dayNames.map(() => 0);
+        const dayCompanyData = dayNames.map(() => ({}));
+
+        dayNames.forEach((_, i) => {
+            const sessions = daySessionGroups[i];
+            if (sessions.length === 0) return;
+
+            // Merge all intervals for wall-clock total
+            const allIntervals = sessions.map(s => ({ start: s.start, end: s.end }));
+            const merged = mergeIntervals(allIntervals);
+            const wallClockSec = merged.reduce((sum, iv) => sum + (iv.end - iv.start) / 1000, 0);
+            dayTotals[i] = wallClockSec;
+
+            // Per company: merge each company's intervals separately
+            const companyMap = {};
+            sessions.forEach(s => {
+                if (!companyMap[s.companyId]) companyMap[s.companyId] = [];
+                companyMap[s.companyId].push({ start: s.start, end: s.end });
+            });
+            Object.entries(companyMap).forEach(([cid, intervals]) => {
+                const cMerged = mergeIntervals(intervals);
+                dayCompanyData[i][cid] = cMerged.reduce((sum, iv) => sum + (iv.end - iv.start) / 1000, 0);
+            });
+        });
+
         const maxDay = Math.max(...dayTotals, 1);
 
         return (
@@ -202,7 +249,7 @@ function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
                         const totalPct = (dayTotals[i] / maxDay) * 100;
                         return (
                             <div key={name} className="nc-bar-item">
-                                <div className="nc-bar-value">{dayTotals[i] > 0 ? formatDurationShort(dayTotals[i]) : ''}</div>
+                                <div className="nc-bar-value">{dayTotals[i] > 0 ? formatDurationShort(Math.round(dayTotals[i])) : ''}</div>
                                 <div className="nc-bar-track">
                                     <div style={{
                                         width: '100%',
