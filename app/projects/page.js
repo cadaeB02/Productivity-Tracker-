@@ -180,6 +180,7 @@ export default function ProjectsPage() {
             pay_type: company.pay_type || 'hourly',
             pay_period: company.pay_period || 'biweekly',
             pay_period_start: company.pay_period_start || '',
+            paycheck_delay_days: company.paycheck_delay_days ?? 6,
             tax_federal_rate: company.tax_federal_rate ?? 12,
             tax_state_rate: company.tax_state_rate ?? 4.4,
             tax_fica_rate: company.tax_fica_rate ?? 7.65,
@@ -195,6 +196,7 @@ export default function ProjectsPage() {
             pay_type: editPayFields.pay_type,
             pay_period: editPayFields.pay_period,
             pay_period_start: editPayFields.pay_period_start || null,
+            paycheck_delay_days: parseInt(editPayFields.paycheck_delay_days) || 6,
             tax_federal_rate: r(editPayFields.tax_federal_rate) || 12,
             tax_state_rate: r(editPayFields.tax_state_rate) || 4.4,
             tax_fica_rate: r(editPayFields.tax_fica_rate) || 7.65,
@@ -283,7 +285,7 @@ export default function ProjectsPage() {
     };
 
     // Reusable pay/tax config form
-    const renderPayConfig = (type, payRate, payType, payPeriod, payPeriodStart, taxFed, taxState, taxFica, taxDeductions, setField) => (
+    const renderPayConfig = (type, payRate, payType, payPeriod, payPeriodStart, paycheckDelay, taxFed, taxState, taxFica, taxDeductions, setField) => (
         <>
             {type === 'physical' && (
                 <div className="pay-config-section">
@@ -313,6 +315,10 @@ export default function ProjectsPage() {
                         <div className="input-group">
                             <label>Period Start Date</label>
                             <input className="input" type="date" value={payPeriodStart} onChange={(e) => setField('pay_period_start', e.target.value)} />
+                        </div>
+                        <div className="input-group">
+                            <label>Paycheck Delay (days after period ends)</label>
+                            <input className="input" type="number" min="0" max="30" placeholder="6" value={paycheckDelay} onChange={(e) => setField('paycheck_delay_days', e.target.value)} />
                         </div>
                     </div>
 
@@ -409,7 +415,7 @@ export default function ProjectsPage() {
                     </div>
 
                     {renderPayConfig(
-                        newCompanyType, newPayRate, newPayType, newPayPeriod, newPayPeriodStart,
+                        newCompanyType, newPayRate, newPayType, newPayPeriod, newPayPeriodStart, '6',
                         newTaxFederal, newTaxState, newTaxFica, newTaxDeductions,
                         (field, value) => {
                             const setters = {
@@ -595,7 +601,8 @@ export default function ProjectsPage() {
                                         </div>
                                         {renderPayConfig(
                                             editPayFields.company_type, editPayFields.pay_rate, editPayFields.pay_type,
-                                            editPayFields.pay_period, editPayFields.pay_period_start, editPayFields.tax_federal_rate,
+                                            editPayFields.pay_period, editPayFields.pay_period_start, editPayFields.paycheck_delay_days,
+                                            editPayFields.tax_federal_rate,
                                             editPayFields.tax_state_rate, editPayFields.tax_fica_rate, editPayFields.tax_deductions_pretax,
                                             (field, value) => setEditPayFields(p => ({ ...p, [field]: value }))
                                         )}

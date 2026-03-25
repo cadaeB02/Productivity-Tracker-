@@ -5,7 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import SessionDetailModal from '@/components/SessionDetailModal';
 import { useCompany } from '@/components/CompanyContext';
-import { getStats, getCompanies, getPayEstimate } from '@/lib/store';
+import { getStats, getCompanies, getPayEstimate, syncPayPeriodToTreasury } from '@/lib/store';
 import { formatDurationShort, formatTime } from '@/lib/utils';
 
 // Rich tooltip component — appears instantly on hover
@@ -81,6 +81,7 @@ export default function StatsPage() {
     const [selectedSession, setSelectedSession] = useState(null);
     const [tooltip, setTooltip] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+    const [syncStatus, setSyncStatus] = useState({}); // { companyId: 'synced' | 'already' | 'error' }
 
     const loadStats = useCallback(async () => {
         setLoading(true);
@@ -306,6 +307,13 @@ export default function StatsPage() {
                                         {est.periodLabel} • {est.daysUntilPayday}d left
                                     </span>
                                 </div>
+                                {est.paycheckDate && (
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', paddingLeft: '18px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Icon name="dollar" size={12} />
+                                        Paycheck hits: <strong style={{ color: 'var(--color-success)' }}>{new Date(est.paycheckDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
+                                        <span style={{ opacity: 0.7 }}>• {est.daysUntilPaycheck}d</span>
+                                    </div>
+                                )}
                                 <div className="paycheck-grid">
                                     <div className="paycheck-stat">
                                         <div className="paycheck-stat-label">Hours Worked</div>
@@ -328,6 +336,34 @@ export default function StatsPage() {
                                         <div className="paycheck-stat-value net">${est.netPay.toFixed(2)}</div>
                                     </div>
                                 </div>
+                                {est.companyId && (
+                                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <button
+                                            className={`btn btn-sm ${syncStatus[est.companyId] === 'synced' ? 'btn-success' : syncStatus[est.companyId] === 'already' ? 'btn-secondary' : 'btn-primary'}`}
+                                            disabled={!!syncStatus[est.companyId]}
+                                            onClick={async () => {
+                                                try {
+                                                    const result = await syncPayPeriodToTreasury(est.companyId);
+                                                    setSyncStatus(p => ({ ...p, [est.companyId]: result.alreadySynced ? 'already' : 'synced' }));
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    setSyncStatus(p => ({ ...p, [est.companyId]: 'error' }));
+                                                }
+                                            }}
+                                        >
+                                            {syncStatus[est.companyId] === 'synced'
+                                                ? '✓ Synced to Treasury'
+                                                : syncStatus[est.companyId] === 'already'
+                                                ? '✓ Already Synced'
+                                                : syncStatus[est.companyId] === 'error'
+                                                ? 'Error'
+                                                : '→ Sync to Treasury'}
+                                        </button>
+                                        {syncStatus[est.companyId] === 'synced' && (
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-success)' }}>Revenue entry created!</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
