@@ -7,7 +7,7 @@ import { useCompany } from '@/components/CompanyContext';
 import { useSidebarOverride } from '@/components/SidebarOverrideContext';
 import {
     getCompanies, getTransactions, getNotes, addNote, updateNote,
-    getActiveSessions, getAllProjects, getSessions,
+    getActiveSessions, getAllProjects, getSessions, startSession,
 } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
 
@@ -121,7 +121,7 @@ function QuickNotesWidget({ notes, companies, onAddNote, onAssignCompany }) {
     );
 }
 
-function ActiveTimerWidget({ activeSessions, companies, projects, tasks }) {
+function ActiveTimerWidget({ activeSessions, companies, projects, tasks, onClockIn }) {
     const [elapsed, setElapsed] = useState({});
 
     useEffect(() => {
@@ -147,10 +147,18 @@ function ActiveTimerWidget({ activeSessions, companies, projects, tasks }) {
     if (activeSessions.length === 0) {
         return (
             <div className="nc-widget-body">
-                <div className="nc-timer-idle">
-                    <Icon name="timer" size={28} />
-                    <div className="nc-timer-idle-text">No active session</div>
-                    <a href="/" className="nc-timer-link">Start Timer</a>
+                <div className="nc-timer-tiles">
+                    {companies.map(c => (
+                        <button
+                            key={c.id}
+                            className="nc-timer-tile"
+                            onClick={() => onClockIn(c.id)}
+                        >
+                            <span className="color-dot" style={{ backgroundColor: c.color, width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
+                            <span className="nc-timer-tile-name">{c.name}</span>
+                            <span className="nc-timer-tile-action">Clock In</span>
+                        </button>
+                    ))}
                 </div>
             </div>
         );
@@ -409,6 +417,22 @@ export default function DashboardPage() {
         } catch (err) { console.error('Add note error:', err); }
     };
 
+    const handleClockIn = async (companyId) => {
+        try {
+            // Find first project and task for this company for a quick clock-in
+            const companyProjects = projects.filter(p => p.company_id === companyId);
+            const proj = companyProjects[0];
+            const projTasks = proj ? tasks.filter(t => t.project_id === proj.id) : [];
+            const task = projTasks[0];
+            await startSession({
+                company_id: companyId,
+                project_id: proj?.id || null,
+                task_id: task?.id || null,
+            });
+            loadData();
+        } catch (err) { console.error('Clock in error:', err); }
+    };
+
     const handleAssignCompany = async (noteId, companyId) => {
         try {
             await updateNote(noteId, { company_id: companyId });
@@ -484,7 +508,7 @@ export default function DashboardPage() {
             case 'quick-notes':
                 return <QuickNotesWidget notes={notes} companies={companies} onAddNote={handleAddNote} onAssignCompany={handleAssignCompany} />;
             case 'active-timer':
-                return <ActiveTimerWidget activeSessions={activeSessions} companies={companies} projects={projects} tasks={tasks} />;
+                return <ActiveTimerWidget activeSessions={activeSessions} companies={companies} projects={projects} tasks={tasks} onClockIn={handleClockIn} />;
             case 'upcoming-recurring':
                 return <UpcomingRecurringWidget transactions={transactions} />;
             case 'revenue-snapshot':

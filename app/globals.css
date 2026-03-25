@@ -4236,6 +4236,43 @@ textarea.input {
 }
 
 /* ── Active Timer Widget ── */
+.nc-timer-tiles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.nc-timer-tile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.78rem;
+}
+.nc-timer-tile:hover {
+    border-color: var(--color-accent);
+    background: rgba(139, 92, 246, 0.05);
+}
+.nc-timer-tile-name {
+    flex: 1;
+    font-weight: 600;
+}
+.nc-timer-tile-action {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.nc-timer-tile:hover .nc-timer-tile-action {
+    opacity: 1;
+}
 .nc-timer-idle {
     display: flex;
     flex-direction: column;
