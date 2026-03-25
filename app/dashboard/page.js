@@ -70,43 +70,74 @@ function formatDurationShort(totalSeconds) {
 function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
     const [animated, setAnimated] = useState(false);
     const [view, setView] = useState('company'); // 'company' | 'day' | 'summary'
+    const [period, setPeriod] = useState('all'); // 'all' | 'week' | 'month'
 
     useEffect(() => {
         setAnimated(false);
         const timer = setTimeout(() => setAnimated(true), 50);
         return () => clearTimeout(timer);
-    }, [view, activeCompanyId]);
+    }, [view, activeCompanyId, period]);
 
     // Filter by active company
-    const filtered = activeCompanyId
+    const companyFiltered = activeCompanyId
         ? sessions.filter(s => s.company_id === activeCompanyId)
         : sessions;
+
+    // Filter by time period
+    const now = new Date();
+    const filtered = companyFiltered.filter(s => {
+        if (period === 'all') return true;
+        const start = new Date(s.start_time);
+        if (period === 'week') {
+            const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+            return start >= weekAgo;
+        }
+        if (period === 'month') {
+            const monthAgo = new Date(now); monthAgo.setMonth(monthAgo.getMonth() - 1);
+            return start >= monthAgo;
+        }
+        return true;
+    });
+
+    // Build color map
+    const colorMap = {};
+    companies.forEach(c => { colorMap[c.id] = c.color || '#6366f1'; });
+    const nameMap = {};
+    companies.forEach(c => { nameMap[c.id] = c.name; });
+
+    // Active company color for single-company view
+    const activeColor = activeCompanyId ? (colorMap[activeCompanyId] || '#6366f1') : null;
 
     if (filtered.length === 0) {
         return <div className="nc-widget-body"><div className="nc-empty">No tracked time yet</div></div>;
     }
 
+    // Tab button style helper
+    const tabStyle = (active) => ({
+        fontSize: '0.6rem', fontWeight: 600, textTransform: 'uppercase',
+        letterSpacing: '0.04em', padding: '2px 8px', borderRadius: '4px',
+        border: '1px solid ' + (active ? 'var(--color-accent)' : 'var(--border-subtle)'),
+        background: active ? 'rgba(139,92,246,0.1)' : 'transparent',
+        color: active ? 'var(--color-accent)' : 'var(--text-muted)',
+        cursor: 'pointer', transition: 'all 0.15s',
+    });
+
     // View tabs
     const viewTabs = (
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
             {[
                 { key: 'company', label: 'By Company' },
                 { key: 'day', label: 'By Day' },
                 { key: 'summary', label: 'Summary' },
             ].map(t => (
-                <button
-                    key={t.key}
-                    onClick={() => setView(t.key)}
-                    style={{
-                        fontSize: '0.6rem', fontWeight: 600, textTransform: 'uppercase',
-                        letterSpacing: '0.04em', padding: '2px 8px', borderRadius: '4px',
-                        border: '1px solid ' + (view === t.key ? 'var(--color-accent)' : 'var(--border-subtle)'),
-                        background: view === t.key ? 'rgba(139,92,246,0.1)' : 'transparent',
-                        color: view === t.key ? 'var(--color-accent)' : 'var(--text-muted)',
-                        cursor: 'pointer', transition: 'all 0.15s',
-                    }}
-                >
+                <button key={t.key} onClick={() => setView(t.key)} style={tabStyle(view === t.key)}>
                     {t.label}
+                </button>
+            ))}
+            <div style={{ flex: 1 }} />
+            {['all', 'week', 'month'].map(p => (
+                <button key={p} onClick={() => setPeriod(p)} style={tabStyle(period === p)}>
+                    {p === 'all' ? 'All' : p === 'week' ? '7d' : '30d'}
                 </button>
             ))}
         </div>
@@ -115,12 +146,10 @@ function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
     // ── By Company view ──
     if (view === 'company') {
         const companyHours = {};
-        const companyColors = {};
         filtered.forEach(s => {
-            const name = s.companies?.name || companies.find(c => c.id === s.company_id)?.name || 'Unknown';
-            const color = s.companies?.color || companies.find(c => c.id === s.company_id)?.color || '#6366f1';
+            const cid = s.company_id;
+            const name = nameMap[cid] || s.companies?.name || 'Unknown';
             companyHours[name] = (companyHours[name] || 0) + (s.duration || 0);
-            companyColors[name] = color;
         });
         const entries = Object.entries(companyHours).sort((a, b) => b[1] - a[1]);
         const maxSec = Math.max(...entries.map(e => e[1]), 1);
@@ -129,51 +158,77 @@ function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
             <div className="nc-widget-body">
                 {viewTabs}
                 <div className="nc-bar-chart">
-                    {entries.map(([name, seconds]) => (
-                        <div key={name} className="nc-bar-item">
-                            <div className="nc-bar-value">{formatDurationShort(seconds)}</div>
-                            <div className="nc-bar-track">
-                                <div className="nc-bar-fill" style={{
-                                    height: animated ? `${Math.max((seconds / maxSec) * 100, 4)}%` : '0%',
-                                    backgroundColor: companyColors[name],
-                                    transition: 'height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                                }} />
+                    {entries.map(([name, seconds]) => {
+                        const comp = companies.find(c => c.name === name);
+                        return (
+                            <div key={name} className="nc-bar-item">
+                                <div className="nc-bar-value">{formatDurationShort(seconds)}</div>
+                                <div className="nc-bar-track">
+                                    <div className="nc-bar-fill" style={{
+                                        height: animated ? `${Math.max((seconds / maxSec) * 100, 4)}%` : '0%',
+                                        backgroundColor: comp?.color || '#6366f1',
+                                        transition: 'height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                    }} />
+                                </div>
+                                <div className="nc-bar-label">{name}</div>
                             </div>
-                            <div className="nc-bar-label">{name}</div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         );
     }
 
-    // ── By Day view ──
+    // ── By Day view (stacked company colors) ──
     if (view === 'day') {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const dayHours = [0, 0, 0, 0, 0, 0, 0];
+        // Aggregate per day per company
+        const dayCompanyData = dayNames.map(() => ({})); // [{companyId: seconds}, ...]
+        const dayTotals = [0, 0, 0, 0, 0, 0, 0];
         filtered.forEach(s => {
             const day = new Date(s.start_time).getDay();
-            dayHours[day] += s.duration || 0;
+            const cid = s.company_id || 'unknown';
+            dayCompanyData[day][cid] = (dayCompanyData[day][cid] || 0) + (s.duration || 0);
+            dayTotals[day] += s.duration || 0;
         });
-        const maxDay = Math.max(...dayHours, 1);
+        const maxDay = Math.max(...dayTotals, 1);
 
         return (
             <div className="nc-widget-body">
                 {viewTabs}
                 <div className="nc-bar-chart">
-                    {dayNames.map((name, i) => (
-                        <div key={name} className="nc-bar-item">
-                            <div className="nc-bar-value">{dayHours[i] > 0 ? formatDurationShort(dayHours[i]) : ''}</div>
-                            <div className="nc-bar-track">
-                                <div className="nc-bar-fill" style={{
-                                    height: animated ? `${Math.max((dayHours[i] / maxDay) * 100, dayHours[i] > 0 ? 4 : 0)}%` : '0%',
-                                    backgroundColor: '#f59e0b',
-                                    transition: `height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.05}s`,
-                                }} />
+                    {dayNames.map((name, i) => {
+                        const compEntries = Object.entries(dayCompanyData[i]).sort((a, b) => b[1] - a[1]);
+                        const totalPct = (dayTotals[i] / maxDay) * 100;
+                        return (
+                            <div key={name} className="nc-bar-item">
+                                <div className="nc-bar-value">{dayTotals[i] > 0 ? formatDurationShort(dayTotals[i]) : ''}</div>
+                                <div className="nc-bar-track">
+                                    <div style={{
+                                        width: '100%',
+                                        height: animated ? `${Math.max(totalPct, dayTotals[i] > 0 ? 4 : 0)}%` : '0%',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        borderRadius: '4px 4px 0 0',
+                                        overflow: 'hidden',
+                                        transition: `height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.05}s`,
+                                    }}>
+                                        {compEntries.map(([cid, sec]) => {
+                                            const segPct = dayTotals[i] > 0 ? (sec / dayTotals[i]) * 100 : 0;
+                                            return (
+                                                <div key={cid} style={{
+                                                    flex: `0 0 ${segPct}%`,
+                                                    backgroundColor: activeColor || colorMap[cid] || '#6366f1',
+                                                    minHeight: '1px',
+                                                }} />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="nc-bar-label">{name}</div>
                             </div>
-                            <div className="nc-bar-label">{name}</div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         );
@@ -185,6 +240,12 @@ function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
     const avgPerDay = uniqueDays > 0 ? totalSec / uniqueDays : 0;
     const avgSession = filtered.length > 0 ? totalSec / filtered.length : 0;
 
+    // Weekly avg: total / number of weeks spanned
+    const dates = filtered.map(s => new Date(s.start_time).getTime());
+    const spanMs = dates.length > 0 ? Math.max(...dates) - Math.min(...dates) : 0;
+    const weeks = Math.max(Math.ceil(spanMs / (7 * 24 * 3600 * 1000)), 1);
+    const months = Math.max(Math.ceil(spanMs / (30 * 24 * 3600 * 1000)), 1);
+
     return (
         <div className="nc-widget-body">
             {viewTabs}
@@ -193,9 +254,9 @@ function HoursByCompanyWidget({ sessions, companies, activeCompanyId }) {
                     { label: 'Total Hours', value: formatDurationShort(totalSec) },
                     { label: 'Total Sessions', value: filtered.length },
                     { label: 'Avg / Day', value: formatDurationShort(Math.round(avgPerDay)) },
+                    { label: 'Avg / Week', value: formatDurationShort(Math.round(totalSec / weeks)) },
+                    { label: 'Avg / Month', value: formatDurationShort(Math.round(totalSec / months)) },
                     { label: 'Avg Session', value: formatDurationShort(Math.round(avgSession)) },
-                    { label: 'Days Tracked', value: uniqueDays },
-                    { label: 'Companies', value: new Set(filtered.map(s => s.company_id)).size },
                 ].map(stat => (
                     <div key={stat.label} style={{
                         background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)',
