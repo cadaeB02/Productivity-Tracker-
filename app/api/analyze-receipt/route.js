@@ -20,7 +20,7 @@ export async function POST(request) {
         const base64 = Buffer.from(bytes).toString('base64');
         const mimeType = file.type || 'image/jpeg';
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         const prompt = `Analyze this document (which may be a single receipt, an invoice, or a multi-page bank statement) and extract all financial transactions or notable items.
 
