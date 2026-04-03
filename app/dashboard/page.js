@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
@@ -10,9 +11,17 @@ import {
     getActiveSessions, getAllProjects, getSessions, startSession,
 } from '@/lib/store';
 import { formatDuration } from '@/lib/utils';
+import {
+    chatWithAgentActions,
+    generateProactiveSuggestion,
+    getDismissedSuggestions,
+    dismissSuggestion,
+    hasApiKey,
+} from '@/lib/gemini';
 
 // ── Widget Registry ──
 const WIDGET_REGISTRY = [
+    { id: 'personal-agent', name: 'Personal Agent', icon: 'robot', description: 'AI chat & suggestions' },
     { id: 'hours-by-company', name: 'Hours by Company', icon: 'chart', description: 'Time per company bar chart' },
     { id: 'quick-notes', name: 'Quick Notes', icon: 'note', description: 'Recent notes, add new' },
     { id: 'active-timer', name: 'Active Timer', icon: 'timer', description: 'Running work session' },
@@ -22,7 +31,7 @@ const WIDGET_REGISTRY = [
     { id: 'projects-overview', name: 'Projects Overview', icon: 'folder', description: 'Active projects' },
 ];
 
-const DEFAULT_WIDGETS = ['hours-by-company', 'active-timer', 'quick-notes', 'revenue-snapshot'];
+const DEFAULT_WIDGETS = ['personal-agent', 'hours-by-company', 'active-timer', 'quick-notes', 'revenue-snapshot'];
 
 function getStoredLayout() {
     if (typeof window === 'undefined') return null;
@@ -652,6 +661,155 @@ function ProjectsOverviewWidget({ projects, companies, sessions }) {
     );
 }
 
+function PersonalAgentWidget({ companies, projects, tasks, sessions, activeSessions }) {
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [suggestion, setSuggestion] = useState(null);
+    const fileInputRef = useRef(null);
+    const [attachedImages, setAttachedImages] = useState([]);
+
+    // Load proactive suggestion
+    useEffect(() => {
+        if (!hasApiKey() || companies.length === 0) return;
+        const loadSuggestion = async () => {
+            try {
+                const sessionCtx = sessions.slice(0, 15).map(s => {
+                    const company = s.companies?.name || 'Unknown';
+                    const task = s.tasks?.name || 'Unknown';
+                    const hrs = s.duration ? (s.duration / 3600).toFixed(1) : '?';
+                    return `${new Date(s.start_time).toLocaleDateString()} | ${company} > ${task} | ${hrs}h`;
+                }).join('\n');
+                const compCtx = companies.map(c => `${c.name} (${c.company_type || 'digital'})`).join(', ');
+                const dismissed = getDismissedSuggestions();
+                const text = await generateProactiveSuggestion(sessionCtx, compCtx, activeSessions, dismissed);
+                if (text) setSuggestion(text);
+            } catch {}
+        };
+        loadSuggestion();
+    }, [companies.length]);
+
+    const handleChat = async () => {
+        if ((!input.trim() && attachedImages.length === 0) || loading || !hasApiKey()) return;
+        const userMsg = input.trim();
+        const userImages = [...attachedImages];
+        setInput('');
+        setAttachedImages([]);
+        setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+        setLoading(true);
+        try {
+            const sessionCtx = sessions.slice(0, 15).map(s => {
+                const company = s.companies?.name || 'Unknown';
+                const task = s.tasks?.name || 'Unknown';
+                return `ID: ${s.id} | ${new Date(s.start_time).toLocaleDateString()} | ${company} > ${task}`;
+            }).join('\n');
+            const compCtx = companies.map(c => {
+                const ps = projects.filter(p => p.company_id === c.id);
+                return `${c.name} (${c.id}): ${ps.map(p => p.name).join(', ') || 'no projects'}`;
+            }).join('\n');
+            const { text } = await chatWithAgentActions(userMsg, sessionCtx, compCtx, userImages);
+            setMessages(prev => [...prev, { role: 'assistant', content: text.substring(0, 300) }]);
+        } catch (err) {
+            setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+        }
+        setLoading(false);
+    };
+
+    const handleFileSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => setAttachedImages(prev => [...prev, ev.target.result]);
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
+    return (
+        <div className="nc-widget-body">
+            <div className="pa-widget-chat">
+                {/* Suggestion */}
+                {suggestion && (
+                    <div className="pa-widget-suggestion">
+                        <span style={{ flex: 1 }}>{suggestion}</span>
+                        <button className="pa-widget-suggestion-dismiss" onClick={() => {
+                            dismissSuggestion(suggestion);
+                            setSuggestion(null);
+                        }}>
+                            <Icon name="close" size={10} />
+                        </button>
+                    </div>
+                )}
+
+                {/* Messages */}
+                {messages.length > 0 && (
+                    <div className="pa-widget-messages">
+                        {messages.slice(-4).map((msg, i) => (
+                            <div key={i} className={`pa-widget-msg ${msg.role}`}>
+                                {msg.content}
+                            </div>
+                        ))}
+                        {loading && (
+                            <div className="pa-widget-msg assistant" style={{ opacity: 0.6 }}>
+                                Thinking...
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Image previews */}
+                {attachedImages.length > 0 && (
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                        {attachedImages.map((img, i) => (
+                            <div key={i} style={{ width: 32, height: 32, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                                <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Input */}
+                <div className="pa-widget-input-row">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                    />
+                    <button
+                        className="pa-attach-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{ width: 28, height: 28, fontSize: '0.7rem' }}
+                        disabled={loading}
+                    >
+                        <Icon name="upload" size={12} />
+                    </button>
+                    <input
+                        className="pa-text-input"
+                        placeholder="Ask anything..."
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleChat()}
+                        disabled={loading}
+                    />
+                    <button
+                        className="pa-send-btn pa-widget-send"
+                        onClick={handleChat}
+                        disabled={loading || (!input.trim() && attachedImages.length === 0)}
+                    >
+                        <Icon name="send" size={12} />
+                    </button>
+                </div>
+
+                {/* Link to full page */}
+                <Link href="/agent" className="pa-widget-link">
+                    Open Personal Agent <Icon name="arrow-right" size={10} />
+                </Link>
+            </div>
+        </div>
+    );
+}
+
 // ═══════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════
@@ -820,6 +978,8 @@ export default function DashboardPage() {
     // Render widget
     const renderWidget = (widgetId) => {
         switch (widgetId) {
+            case 'personal-agent':
+                return <PersonalAgentWidget companies={companies} projects={projects} tasks={tasks} sessions={sessions} activeSessions={activeSessions} />;
             case 'hours-by-company':
                 return <HoursByCompanyWidget sessions={sessions} companies={companies} activeCompanyId={activeCompanyId} />;
             case 'quick-notes':

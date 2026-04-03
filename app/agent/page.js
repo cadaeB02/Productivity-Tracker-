@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import {
@@ -11,23 +11,41 @@ import {
     updateSession,
     deleteSession,
     addManualSession,
+    getActiveSessions,
 } from '@/lib/store';
-import { chatWithAgentActions, generatePrioritySuggestions, hasApiKey } from '@/lib/gemini';
+import {
+    chatWithAgentActions,
+    generatePrioritySuggestions,
+    generateProactiveSuggestion,
+    getDismissedSuggestions,
+    dismissSuggestion,
+    hasApiKey,
+} from '@/lib/gemini';
 import { formatDurationShort, toLocalISOString } from '@/lib/utils';
 
-export default function AgentPage() {
+export default function PersonalAgentPage() {
     const [companies, setCompanies] = useState([]);
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [sessions, setSessions] = useState([]);
+    const [activeSessions, setActiveSessions] = useState([]);
     const [selectedCompany, setSelectedCompany] = useState('');
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [hasKey, setHasKey] = useState(false);
-    const [pendingActions, setPendingActions] = useState(null); // { messageIndex, actions }
+    const [pendingActions, setPendingActions] = useState(null);
     const [applyingActions, setApplyingActions] = useState(false);
     const chatEndRef = useRef(null);
+
+    // Image upload state
+    const [attachedImages, setAttachedImages] = useState([]); // base64 data URLs
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef(null);
+
+    // Proactive suggestion
+    const [suggestion, setSuggestion] = useState(null);
+    const [suggestionLoading, setSuggestionLoading] = useState(false);
 
     useEffect(() => {
         setHasKey(hasApiKey());
@@ -40,18 +58,49 @@ export default function AgentPage() {
 
     const loadData = async () => {
         try {
-            const [c, p, t, s] = await Promise.all([
+            const [c, p, t, s, active] = await Promise.all([
                 getCompanies(),
                 getAllProjects(),
                 getAllTasks(),
                 getSessions(),
+                getActiveSessions(),
             ]);
             setCompanies(c);
             setProjects(p);
             setTasks(t);
             setSessions(s);
+            setActiveSessions(active);
         } catch (err) {
             console.error(err);
+        }
+    };
+
+    // Load proactive suggestion on first load
+    const loadSuggestion = useCallback(async () => {
+        if (!hasApiKey() || suggestionLoading) return;
+        setSuggestionLoading(true);
+        try {
+            const sessionCtx = buildSessionContext();
+            const compCtx = buildCompaniesContext();
+            const dismissed = getDismissedSuggestions();
+            const text = await generateProactiveSuggestion(sessionCtx, compCtx, activeSessions, dismissed);
+            if (text) setSuggestion(text);
+        } catch (err) {
+            console.warn('Suggestion load failed:', err);
+        }
+        setSuggestionLoading(false);
+    }, [activeSessions]);
+
+    useEffect(() => {
+        if (companies.length > 0 && sessions.length > 0) {
+            loadSuggestion();
+        }
+    }, [companies.length, sessions.length]);
+
+    const handleDismissSuggestion = () => {
+        if (suggestion) {
+            dismissSuggestion(suggestion);
+            setSuggestion(null);
         }
     };
 
@@ -82,9 +131,74 @@ export default function AgentPage() {
                 const taskList = projTasks.map(t => `    - Task: "${t.name}" (task_id: ${t.id})`).join('\n');
                 return `  - Project: "${p.name}" (project_id: ${p.id})\n${taskList}`;
             }).join('\n');
-            return `Company: "${c.name}" (company_id: ${c.id})\n${projectLines}`;
+            const typeInfo = c.company_type ? ` [${c.company_type}]` : '';
+            const payInfo = c.pay_rate ? ` | $${c.pay_rate}/${c.pay_type || 'hr'}` : '';
+            return `Company: "${c.name}" (company_id: ${c.id})${typeInfo}${payInfo}\n${projectLines}`;
         }).join('\n\n') || 'No companies set up.';
     };
+
+    // ── Image handling ──
+
+    const processFiles = async (files) => {
+        const maxImages = 5;
+        const remaining = maxImages - attachedImages.length;
+        const toProcess = Array.from(files).slice(0, remaining);
+
+        for (const file of toProcess) {
+            if (!file.type.startsWith('image/')) continue;
+
+            // Handle HEIC conversion (iPhone photos)
+            let processedFile = file;
+            if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+                try {
+                    const heic2any = (await import('heic2any')).default;
+                    const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+                    processedFile = new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+                } catch (err) {
+                    console.warn('HEIC conversion failed, using original:', err);
+                }
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setAttachedImages(prev => [...prev, e.target.result]);
+            };
+            reader.readAsDataURL(processedFile);
+        }
+    };
+
+    const handleFileSelect = (e) => {
+        processFiles(e.target.files);
+        e.target.value = ''; // Reset so same file can be selected again
+    };
+
+    const removeImage = (index) => {
+        setAttachedImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Drag and drop
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        if (e.dataTransfer.files?.length > 0) {
+            processFiles(e.dataTransfer.files);
+        }
+    };
+
+    // ── Quick actions ──
 
     const handlePlanSession = async () => {
         if (!hasKey) {
@@ -120,8 +234,14 @@ export default function AgentPage() {
         setLoading(false);
     };
 
+    const handleQuickAction = (prompt) => {
+        setInput(prompt);
+    };
+
+    // ── Chat ──
+
     const handleChat = async () => {
-        if (!input.trim() || loading) return;
+        if ((!input.trim() && attachedImages.length === 0) || loading) return;
         if (!hasKey) {
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -131,16 +251,23 @@ export default function AgentPage() {
         }
 
         const userMessage = input.trim();
+        const userImages = [...attachedImages];
         setInput('');
-        setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+        setAttachedImages([]);
+        setMessages(prev => [...prev, { role: 'user', content: userMessage, images: userImages }]);
         setLoading(true);
 
         try {
             const sessionContext = buildSessionContext();
             const companiesContext = buildCompaniesContext();
-            const { text, actions } = await chatWithAgentActions(userMessage, sessionContext, companiesContext);
+            const { text, actions } = await chatWithAgentActions(
+                userMessage,
+                sessionContext,
+                companiesContext,
+                userImages
+            );
 
-            const msgIndex = messages.length + 1; // +1 because we just added user msg
+            const msgIndex = messages.length + 1;
             setMessages(prev => [...prev, { role: 'assistant', content: text, actions }]);
 
             if (actions && actions.length > 0) {
@@ -177,14 +304,13 @@ export default function AgentPage() {
                             updates.duration = Math.max(0, Math.floor((new Date(updates.end_time) - new Date(updates.start_time)) / 1000));
                         }
                         await updateSession(action.session_id, updates);
-                        results.push(`Updated session: ${action.description}`);
+                        results.push(`✅ ${action.description}`);
                         break;
                     }
                     case 'create_session': {
                         const startTime = new Date(action.start_time);
                         const endTime = new Date(action.end_time);
                         const duration = Math.max(0, Math.floor((endTime - startTime) / 1000));
-                        // Use the raw session insert via addManualSession
                         await addManualSession(
                             action.task_id,
                             action.project_id,
@@ -193,30 +319,29 @@ export default function AgentPage() {
                             duration,
                             action.summary || ''
                         );
-                        results.push(`Created session: ${action.description}`);
+                        results.push(`✅ ${action.description}`);
                         break;
                     }
                     case 'delete_session': {
                         await deleteSession(action.session_id);
-                        results.push(`Deleted session: ${action.description}`);
+                        results.push(`✅ ${action.description}`);
                         break;
                     }
                     default:
-                        results.push(`Unknown action type: ${action.type}`);
+                        results.push(`⚠️ Unknown action type: ${action.type}`);
                 }
             } catch (err) {
-                results.push(`Failed: ${action.description} — ${err.message}`);
+                results.push(`❌ Failed: ${action.description} — ${err.message}`);
             }
         }
 
         setMessages(prev => [...prev, {
             role: 'assistant',
-            content: `**Changes applied successfully!**\n\n${results.map(r => `- ${r}`).join('\n')}`,
+            content: `**Changes applied!**\n\n${results.join('\n')}`,
         }]);
 
         setPendingActions(null);
         setApplyingActions(false);
-        // Refresh session data
         await loadData();
     };
 
@@ -228,21 +353,41 @@ export default function AgentPage() {
         }]);
     };
 
+    // Active sessions summary for header
+    const activeCount = activeSessions.length;
+
     return (
         <AppLayout>
-            <div className="page-header">
-                <h2><Icon name="robot" size={24} className="icon-inline" /> AI Agent</h2>
-                <p>Get AI-powered productivity insights — or ask me to edit your timesheets</p>
-            </div>
+            <div className="pa-container"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                {/* Header */}
+                <div className="pa-header">
+                    <div className="pa-header-left">
+                        <h2 className="pa-title">
+                            <Icon name="robot" size={24} className="icon-inline" />
+                            Personal Agent
+                        </h2>
+                        <p className="pa-subtitle">Your AI-powered productivity assistant — chat, upload images, manage timesheets</p>
+                    </div>
+                    <div className="pa-header-right">
+                        {activeCount > 0 && (
+                            <div className="pa-active-badge">
+                                <span className="pa-active-dot" />
+                                {activeCount} active {activeCount === 1 ? 'session' : 'sessions'}
+                            </div>
+                        )}
+                    </div>
+                </div>
 
-            {/* Controls */}
-            <div className="card" style={{ marginBottom: '20px' }}>
-                <div className="flex gap-3 items-center" style={{ flexWrap: 'wrap' }}>
+                {/* Controls */}
+                <div className="pa-toolbar">
                     <select
-                        className="input"
+                        className="input pa-company-select"
                         value={selectedCompany}
                         onChange={(e) => setSelectedCompany(e.target.value)}
-                        style={{ minWidth: '180px' }}
                     >
                         <option value="">All Companies</option>
                         {companies.map((c) => (
@@ -250,116 +395,221 @@ export default function AgentPage() {
                         ))}
                     </select>
 
-                    <button
-                        className="btn btn-primary"
-                        onClick={handlePlanSession}
-                        disabled={loading}
-                    >
-                        {loading ? <><Icon name="hourglass" size={14} /> Thinking...</> : <><Icon name="target" size={14} /> Plan My Next Session</>}
-                    </button>
+                    <div className="pa-quick-actions">
+                        <button className="pa-quick-btn" onClick={handlePlanSession} disabled={loading}>
+                            <Icon name="target" size={14} /> Plan My Day
+                        </button>
+                        <button className="pa-quick-btn" onClick={() => handleQuickAction('Here\'s a screenshot of my timesheet. Please parse the times and add the sessions.')} disabled={loading}>
+                            <Icon name="clipboard" size={14} /> Scan Timesheet
+                        </button>
+                        <button className="pa-quick-btn" onClick={() => handleQuickAction('Give me a weekly summary of my work hours across all companies.')} disabled={loading}>
+                            <Icon name="chart" size={14} /> Weekly Summary
+                        </button>
+                    </div>
 
                     <button
-                        className="btn btn-ghost"
+                        className="btn btn-ghost pa-clear-btn"
                         onClick={() => { setMessages([]); setPendingActions(null); }}
                         disabled={messages.length === 0}
                     >
                         Clear Chat
                     </button>
                 </div>
-            </div>
 
-            {/* Chat Area */}
-            <div className="card">
-                <div className="ai-chat" style={{ minHeight: '300px' }}>
+                {/* Proactive Suggestion Banner */}
+                {suggestion && (
+                    <div className="pa-suggestion-banner">
+                        <div className="pa-suggestion-text">{suggestion}</div>
+                        <div className="pa-suggestion-actions">
+                            <button className="pa-suggestion-action" onClick={() => {
+                                setInput(suggestion.replace(/^[^\s]+\s/, '')); // Strip leading emoji
+                                handleDismissSuggestion();
+                            }}>
+                                <Icon name="chat" size={12} /> Reply
+                            </button>
+                            <button className="pa-suggestion-dismiss" onClick={handleDismissSuggestion}>
+                                <Icon name="close" size={12} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Drag overlay */}
+                {isDragging && (
+                    <div className="pa-drop-overlay">
+                        <div className="pa-drop-content">
+                            <Icon name="upload" size={48} />
+                            <p>Drop images here</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Chat Area */}
+                <div className="pa-chat-area">
                     {messages.length === 0 ? (
-                        <div className="empty-state" style={{ padding: '40px 20px' }}>
-                            <div className="empty-state-icon"><Icon name="brain" size={48} /></div>
-                            <h3>Your AI Productivity Coach</h3>
-                            <p>Click &quot;Plan My Next Session&quot; for task priorities, or ask me to edit your timesheets.</p>
-                            <div className="agent-examples">
-                                <div className="agent-example-label">Try saying:</div>
-                                <button className="agent-example-chip" onClick={() => setInput('Change my GBS session yesterday to end at 2:30pm')}>
-                                    &quot;Change my GBS session yesterday to end at 2:30pm&quot;
+                        <div className="pa-empty-state">
+                            <div className="pa-empty-icon">
+                                <Icon name="robot" size={56} />
+                            </div>
+                            <h3>Your Personal Agent</h3>
+                            <p>Upload images, ask questions, manage timesheets — I'm here to help.</p>
+
+                            <div className="pa-category-grid">
+                                <button className="pa-category-card" onClick={() => {
+                                    handleQuickAction('Here\'s a screenshot of my timesheet — please parse the punch times and add sessions.');
+                                    fileInputRef.current?.click();
+                                }}>
+                                    <span className="pa-category-emoji">📸</span>
+                                    <span className="pa-category-label">Scan a Timesheet</span>
+                                    <span className="pa-category-desc">Upload a photo and I'll extract the times</span>
                                 </button>
-                                <button className="agent-example-chip" onClick={() => setInput('I forgot to clock out of my shift — I actually stopped at 5pm')}>
-                                    &quot;I forgot to clock out — I stopped at 5pm&quot;
+                                <button className="pa-category-card" onClick={() => handleQuickAction('I forgot to clock out of my shift — I actually stopped at 5pm')}>
+                                    <span className="pa-category-emoji">⏰</span>
+                                    <span className="pa-category-label">Fix Clock Times</span>
+                                    <span className="pa-category-desc">Adjust start/end times on sessions</span>
                                 </button>
-                                <button className="agent-example-chip" onClick={() => setInput('Split my last session — I took a break from 12-1pm')}>
-                                    &quot;Split my last session — I took a break from 12-1pm&quot;
+                                <button className="pa-category-card" onClick={() => handleQuickAction('Give me a summary of my work patterns this week across all companies')}>
+                                    <span className="pa-category-emoji">📊</span>
+                                    <span className="pa-category-label">Get Insights</span>
+                                    <span className="pa-category-desc">Analyze your productivity patterns</span>
+                                </button>
+                                <button className="pa-category-card" onClick={() => handleQuickAction('What should I work on next? Help me plan my day.')}>
+                                    <span className="pa-category-emoji">📝</span>
+                                    <span className="pa-category-label">Plan My Day</span>
+                                    <span className="pa-category-desc">Get prioritized task suggestions</span>
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        messages.map((msg, i) => (
-                            <div key={i} className={`ai-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
-                                <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                                {/* Show action cards inline */}
-                                {msg.actions && msg.actions.length > 0 && (
-                                    <div className="agent-actions-card">
-                                        <div className="agent-actions-header">
-                                            <Icon name="edit" size={14} />
-                                            <span>Proposed Changes ({msg.actions.length})</span>
+                        <div className="pa-messages">
+                            {messages.map((msg, i) => (
+                                <div key={i} className={`pa-message ${msg.role}`}>
+                                    {msg.role === 'assistant' && (
+                                        <div className="pa-message-avatar">
+                                            <Icon name="robot" size={16} />
                                         </div>
-                                        <div className="agent-actions-list">
-                                            {msg.actions.map((action, ai) => (
-                                                <div key={ai} className="agent-action-item">
-                                                    <span className={`agent-action-badge ${action.type}`}>
-                                                        {action.type === 'update_session' ? 'Edit' : action.type === 'create_session' ? 'Create' : 'Delete'}
-                                                    </span>
-                                                    <span>{action.description}</span>
+                                    )}
+                                    <div className="pa-message-content">
+                                        {/* Show attached images in user messages */}
+                                        {msg.images && msg.images.length > 0 && (
+                                            <div className="pa-message-images">
+                                                {msg.images.map((img, ii) => (
+                                                    <img key={ii} src={img} alt={`Attached ${ii + 1}`} className="pa-message-image" />
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="pa-message-text">{msg.content}</div>
+
+                                        {/* Action cards */}
+                                        {msg.actions && msg.actions.length > 0 && (
+                                            <div className="pa-actions-card">
+                                                <div className="pa-actions-header">
+                                                    <Icon name="edit" size={14} />
+                                                    <span>Proposed Changes ({msg.actions.length})</span>
                                                 </div>
-                                            ))}
-                                        </div>
-                                        {pendingActions && pendingActions.messageIndex === i && (
-                                            <div className="agent-actions-buttons">
-                                                <button
-                                                    className="btn btn-primary btn-sm"
-                                                    onClick={handleApplyActions}
-                                                    disabled={applyingActions}
-                                                >
-                                                    {applyingActions ? (
-                                                        <><Icon name="hourglass" size={14} /> Applying...</>
-                                                    ) : (
-                                                        <><Icon name="check" size={14} /> Apply Changes</>
-                                                    )}
-                                                </button>
-                                                <button
-                                                    className="btn btn-ghost btn-sm"
-                                                    onClick={handleRejectActions}
-                                                    disabled={applyingActions}
-                                                >
-                                                    Reject
-                                                </button>
+                                                <div className="pa-actions-list">
+                                                    {msg.actions.map((action, ai) => (
+                                                        <div key={ai} className="pa-action-item">
+                                                            <span className={`pa-action-badge ${action.type}`}>
+                                                                {action.type === 'update_session' ? 'Edit' : action.type === 'create_session' ? 'Create' : 'Delete'}
+                                                            </span>
+                                                            <span>{action.description}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                {pendingActions && pendingActions.messageIndex === i && (
+                                                    <div className="pa-actions-buttons">
+                                                        <button
+                                                            className="btn btn-primary btn-sm"
+                                                            onClick={handleApplyActions}
+                                                            disabled={applyingActions}
+                                                        >
+                                                            {applyingActions ? (
+                                                                <><Icon name="hourglass" size={14} /> Applying...</>
+                                                            ) : (
+                                                                <><Icon name="check" size={14} /> Apply Changes</>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-ghost btn-sm"
+                                                            onClick={handleRejectActions}
+                                                            disabled={applyingActions}
+                                                        >
+                                                            Reject
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
-                                )}
-                            </div>
-                        ))
-                    )}
+                                </div>
+                            ))}
 
-                    {loading && (
-                        <div className="ai-message assistant" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
-                            Thinking...
+                            {loading && (
+                                <div className="pa-message assistant">
+                                    <div className="pa-message-avatar">
+                                        <Icon name="robot" size={16} />
+                                    </div>
+                                    <div className="pa-message-content">
+                                        <div className="pa-typing">
+                                            <span /><span /><span />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div ref={chatEndRef} />
                         </div>
                     )}
-
-                    <div ref={chatEndRef} />
                 </div>
 
-                {/* Chat Input */}
-                <div className="ai-input-row">
+                {/* Image Previews */}
+                {attachedImages.length > 0 && (
+                    <div className="pa-image-previews">
+                        {attachedImages.map((img, i) => (
+                            <div key={i} className="pa-image-preview">
+                                <img src={img} alt={`Preview ${i + 1}`} />
+                                <button className="pa-image-remove" onClick={() => removeImage(i)}>
+                                    <Icon name="close" size={10} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Input Area */}
+                <div className="pa-input-area">
                     <input
-                        className="input"
-                        placeholder="Ask a question or tell me to edit a timesheet..."
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        accept="image/*"
+                        multiple
+                        style={{ display: 'none' }}
+                        capture="environment"
+                    />
+                    <button
+                        className="pa-attach-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={loading}
+                        title="Attach image"
+                    >
+                        <Icon name="upload" size={18} />
+                    </button>
+                    <input
+                        className="pa-text-input"
+                        placeholder="Describe what you need..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleChat()}
+                        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleChat()}
                         disabled={loading}
                     />
-                    <button className="btn btn-primary" onClick={handleChat} disabled={loading || !input.trim()}>
-                        Send
+                    <button
+                        className="pa-send-btn"
+                        onClick={handleChat}
+                        disabled={loading || (!input.trim() && attachedImages.length === 0)}
+                    >
+                        <Icon name="send" size={18} />
                     </button>
                 </div>
             </div>

@@ -19,7 +19,7 @@ const NAV_ITEMS = [
     { href: '/notes', label: 'Notes', icon: 'note' },
     { href: '/history', label: 'History', icon: 'clipboard' },
     { href: '/stats', label: 'Stats', icon: 'chart' },
-    { href: '/agent', label: 'AI Agent', icon: 'robot' },
+    { href: '/agent', label: 'Personal Agent', icon: 'robot' },
     { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -66,7 +66,7 @@ export default function Sidebar() {
             <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
                     <h1>HoldCo OS</h1>
-                    <span>Productivity Tracker • V7.2</span>
+                    <span>Productivity Tracker • V7.3</span>
                 </div>
 
                 {/* Company Switcher Dropdown */}
