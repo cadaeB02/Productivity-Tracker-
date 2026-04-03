@@ -586,7 +586,6 @@ export default function PersonalAgentPage() {
                         accept="image/*"
                         multiple
                         style={{ display: 'none' }}
-                        capture="environment"
                     />
                     <button
                         className="pa-attach-btn"

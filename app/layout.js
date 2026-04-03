@@ -7,9 +7,21 @@ import PersistentLayout from '@/components/PersistentLayout';
 import { SidebarOverrideProvider } from '@/components/SidebarOverrideContext';
 
 export const metadata = {
-    title: 'HoldCo OS — Productivity Tracker',
+    title: 'HoldCo OS - Productivity Tracker',
     description: 'See your time from every angle. Track work across companies, projects, and contexts.',
     icons: { icon: '/icon.svg' },
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: 'black-translucent',
+        title: 'HoldCo OS',
+    },
+};
+
+export const viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
 };
 
 export default function RootLayout({ children }) {
