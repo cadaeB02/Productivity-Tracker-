@@ -12,6 +12,7 @@ import {
     deleteSession,
     addManualSession,
     getActiveSessions,
+    updateCompany,
 } from '@/lib/store';
 import {
     chatWithAgentActions,
@@ -133,7 +134,13 @@ export default function PersonalAgentPage() {
             }).join('\n');
             const typeInfo = c.company_type ? ` [${c.company_type}]` : '';
             const payInfo = c.pay_rate ? ` | $${c.pay_rate}/${c.pay_type || 'hr'}` : '';
-            return `Company: "${c.name}" (company_id: ${c.id})${typeInfo}${payInfo}\n${projectLines}`;
+            const payConfig = [
+                c.pay_period ? `pay_period: ${c.pay_period}` : null,
+                c.pay_period_start ? `pay_period_start: ${c.pay_period_start}` : null,
+                c.paycheck_delay_days != null ? `paycheck_delay_days: ${c.paycheck_delay_days}` : null,
+            ].filter(Boolean).join(', ');
+            const payConfigLine = payConfig ? `\n  Pay Config: ${payConfig}` : '';
+            return `Company: "${c.name}" (company_id: ${c.id})${typeInfo}${payInfo}${payConfigLine}\n${projectLines}`;
         }).join('\n\n') || 'No companies set up.';
     };
 
@@ -304,7 +311,7 @@ export default function PersonalAgentPage() {
                             updates.duration = Math.max(0, Math.floor((new Date(updates.end_time) - new Date(updates.start_time)) / 1000));
                         }
                         await updateSession(action.session_id, updates);
-                        results.push(`✅ ${action.description}`);
+                        results.push(`[done] ${action.description}`);
                         break;
                     }
                     case 'create_session': {
@@ -324,7 +331,12 @@ export default function PersonalAgentPage() {
                     }
                     case 'delete_session': {
                         await deleteSession(action.session_id);
-                        results.push(`✅ ${action.description}`);
+                        results.push(`[done] ${action.description}`);
+                        break;
+                    }
+                    case 'update_company': {
+                        await updateCompany(action.company_id, action.updates);
+                        results.push(`[done] ${action.description}`);
                         break;
                     }
                     default:
