@@ -319,7 +319,7 @@ export default function PersonalAgentPage() {
                             duration,
                             action.summary || ''
                         );
-                        results.push(`✅ ${action.description}`);
+                        results.push(`[done] ${action.description}`);
                         break;
                     }
                     case 'delete_session': {
@@ -328,10 +328,10 @@ export default function PersonalAgentPage() {
                         break;
                     }
                     default:
-                        results.push(`⚠️ Unknown action type: ${action.type}`);
+                        results.push(`[warning] Unknown action type: ${action.type}`);
                 }
             } catch (err) {
-                results.push(`❌ Failed: ${action.description} — ${err.message}`);
+                results.push(`[error] Failed: ${action.description} - ${err.message}`);
             }
         }
 
@@ -370,7 +370,7 @@ export default function PersonalAgentPage() {
                             <Icon name="robot" size={24} className="icon-inline" />
                             Personal Agent
                         </h2>
-                        <p className="pa-subtitle">Your AI-powered productivity assistant — chat, upload images, manage timesheets</p>
+                        <p className="pa-subtitle">Your AI-powered productivity assistant - chat, upload images, manage timesheets</p>
                     </div>
                     <div className="pa-header-right">
                         {activeCount > 0 && (
@@ -452,29 +452,29 @@ export default function PersonalAgentPage() {
                                 <Icon name="robot" size={56} />
                             </div>
                             <h3>Your Personal Agent</h3>
-                            <p>Upload images, ask questions, manage timesheets — I'm here to help.</p>
+                            <p>Upload images, ask questions, manage timesheets. I'm here to help.</p>
 
                             <div className="pa-category-grid">
                                 <button className="pa-category-card" onClick={() => {
-                                    handleQuickAction('Here\'s a screenshot of my timesheet — please parse the punch times and add sessions.');
+                                    handleQuickAction('Here\'s a screenshot of my timesheet. Please parse the punch times and add sessions.');
                                     fileInputRef.current?.click();
                                 }}>
-                                    <span className="pa-category-emoji">📸</span>
+                                    <span className="pa-category-emoji"><Icon name="eye" size={22} /></span>
                                     <span className="pa-category-label">Scan a Timesheet</span>
                                     <span className="pa-category-desc">Upload a photo and I'll extract the times</span>
                                 </button>
-                                <button className="pa-category-card" onClick={() => handleQuickAction('I forgot to clock out of my shift — I actually stopped at 5pm')}>
-                                    <span className="pa-category-emoji">⏰</span>
+                                <button className="pa-category-card" onClick={() => handleQuickAction('I forgot to clock out of my shift. I actually stopped at 5pm')}>
+                                    <span className="pa-category-emoji"><Icon name="clock" size={22} /></span>
                                     <span className="pa-category-label">Fix Clock Times</span>
                                     <span className="pa-category-desc">Adjust start/end times on sessions</span>
                                 </button>
                                 <button className="pa-category-card" onClick={() => handleQuickAction('Give me a summary of my work patterns this week across all companies')}>
-                                    <span className="pa-category-emoji">📊</span>
+                                    <span className="pa-category-emoji"><Icon name="chart" size={22} /></span>
                                     <span className="pa-category-label">Get Insights</span>
                                     <span className="pa-category-desc">Analyze your productivity patterns</span>
                                 </button>
                                 <button className="pa-category-card" onClick={() => handleQuickAction('What should I work on next? Help me plan my day.')}>
-                                    <span className="pa-category-emoji">📝</span>
+                                    <span className="pa-category-emoji"><Icon name="note" size={22} /></span>
                                     <span className="pa-category-label">Plan My Day</span>
                                     <span className="pa-category-desc">Get prioritized task suggestions</span>
                                 </button>

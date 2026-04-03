@@ -2495,8 +2495,9 @@ textarea.input {
 }
 
 .pa-category-emoji {
-  font-size: 1.4rem;
+  color: var(--color-accent);
   margin-bottom: 4px;
+  display: flex;
 }
 
 .pa-category-label {
