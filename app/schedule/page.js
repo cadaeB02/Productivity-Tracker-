@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
+import { useAuth } from '@/components/AuthProvider';
 import {
     getScheduleBlocks,
     addScheduleBlock,
@@ -61,6 +62,7 @@ function formatHour(hour) {
 
 export default function SchedulePage() {
     const today = new Date();
+    const { user } = useAuth();
     const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1);
     const [currentYear, setCurrentYear] = useState(today.getFullYear());
     const [selectedDate, setSelectedDate] = useState(null);
@@ -401,7 +403,11 @@ export default function SchedulePage() {
         const ruleSummary = autoClockRules.map(r =>
             `Auto-clock: ${r.companies?.name || 'Job'} on day ${r.day_of_week} at ${r.start_time}`
         ).join('\n');
-        return `SCHEDULE BLOCKS:\n${blocksSummary || 'None'}\n\nPENDING TASKS:\n${tasksSummary || 'None'}\n\nAUTO-CLOCK RULES:\n${ruleSummary || 'None'}\n\nCurrent date: ${today.toLocaleDateString()}\nCurrent month view: ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
+        // Include iCal shifts if available
+        const shiftsSummary = shiftsData?.shifts?.slice(0, 15).map(s =>
+            `Work Shift: ${s.employer} on ${s.date} from ${s.startTime} to ${s.endTime} (${s.durationHours}h)`
+        ).join('\n') || '';
+        return `SCHEDULE BLOCKS:\n${blocksSummary || 'None'}\n\nPENDING TASKS:\n${tasksSummary || 'None'}\n\nAUTO-CLOCK RULES:\n${ruleSummary || 'None'}\n\nWORK SHIFTS (from iCal):\n${shiftsSummary || 'None loaded'}\n\nCurrent date: ${today.toLocaleDateString()}\nCurrent month view: ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
     };
 
     // Timeline rendering — compact strip + session list
@@ -1243,6 +1249,38 @@ export default function SchedulePage() {
                     </button>
                 </div>
             </div>
+
+            {/* ===== APPLE CALENDAR SYNC ===== */}
+            {user?.id && (
+                <div className="card" style={{ marginTop: '16px' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Icon name="calendar" size={16} /> Sync to Apple Calendar
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                        Subscribe to this feed in Apple Calendar to see all your HoldCo OS schedule blocks on your iPhone, Mac, and iPad.
+                        Events you add here will automatically appear in Apple Calendar within 15 minutes.
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                            className="input"
+                            readOnly
+                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/calendar-feed?uid=${user.id}`}
+                            style={{ flex: 1, minWidth: '200px', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace" }}
+                            onClick={(e) => e.target.select()}
+                        />
+                        <button className="btn btn-primary btn-sm" onClick={() => {
+                            const url = `${window.location.origin}/api/calendar-feed?uid=${user.id}`;
+                            navigator.clipboard?.writeText(url);
+                            alert('Feed URL copied! Open Apple Calendar → File → New Calendar Subscription → paste the URL');
+                        }}>
+                            <Icon name="link" size={12} /> Copy URL
+                        </button>
+                    </div>
+                    <div style={{ marginTop: '10px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <strong>How to subscribe:</strong> Apple Calendar → File → New Calendar Subscription → paste URL → set auto-refresh to "Every 15 minutes"
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }
