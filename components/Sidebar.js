@@ -12,6 +12,7 @@ import Icon from '@/components/Icon';
 const DEFAULT_NAV_ITEMS = [
     { href: '/dashboard', label: 'Nerve Center', icon: 'brain' },
     { href: '/', label: 'Timer', icon: 'timer' },
+    { href: '/schedule', label: 'Schedule', icon: 'calendar' },
     { href: '/projects', label: 'Projects', icon: 'folder' },
     { href: '/compliance', label: 'Compliance', icon: 'shield' },
     { href: '/filing', label: 'Filing', icon: 'folder' },
