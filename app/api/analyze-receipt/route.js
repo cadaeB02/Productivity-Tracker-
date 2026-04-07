@@ -36,6 +36,9 @@ For each object in the array, strictly follow this JSON structure:
 {
     "type": "expense" | "revenue" | "note" | "goal",
     "vendor": "Store/Company/Entity name (if applicable)",
+    "vendor_name": "The clean, canonical company name (e.g., 'Google' not 'GOOGLE*CLOUD SVCS'). This should be the proper brand name you'd see on their website.",
+    "vendor_domain": "The company's website domain WITHOUT protocol (e.g., 'google.com', 'supabase.com', 'twilio.com'). null if unknown.",
+    "vendor_category": one of ["ai", "hosting", "communication", "marketing", "automation", "software", "analytics", "payments", "legal", "other"] - categorize the vendor/service provider type,
     "amount": total amount as a number (no currency symbol, use 0 if none),
     "date": "YYYY-MM-DD format (infer year if missing based on document context, or use current year)",
     "category": one of ["Food & Dining", "Software & Tools", "Office", "Travel", "Gas & Auto", "Shopping", "Entertainment", "Utilities", "Marketing", "Contractors", "Other"] (try your best to categorize expenses),
@@ -50,6 +53,8 @@ Important Rules:
 - If reading a bank statement with 45 rows, return an array of 45 objects.
 - If reading a single receipt or invoice (like a restaurant bill or software subscription), DO NOT create separate expenses for sub-totals, taxes, tips, or the grand total. Consolidate the entire receipt into ONE single main expense object using the grand total amount.
 - Do NOT aggregate everything into one object IF the document is a bank statement or multi-purchase invoice containing genuinely distinct transactions.
+- For vendor_name, always use the clean brand name (e.g., "Supabase" not "SUPABASE INC", "Google" not "GOOGLE*CLOUD").
+- For vendor_domain, provide the main website domain (e.g., "vercel.com", "openai.com"). Set null if you cannot determine it.
 - Only respond with a valid JSON array, no markdown fences or explanation text.`;
 
         // Retry with exponential backoff for 429 rate limits
