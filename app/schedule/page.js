@@ -109,7 +109,9 @@ export default function SchedulePage() {
     // Timeline detail panel
     const [expandedBlock, setExpandedBlock] = useState(null);
     const [filterCompany, setFilterCompany] = useState('all');
-    const [calendarCollapsed, setCalendarCollapsed] = useState(false);
+    const [calendarView, setCalendarView] = useState('2week'); // 'day', 'week', '2week', 'month'
+    const [rangeStart, setRangeStart] = useState(null);
+    const [rangeEnd, setRangeEnd] = useState(null);
 
 
     // Apple Calendar (synced from Mac)
@@ -660,63 +662,236 @@ export default function SchedulePage() {
                 </div>
             )}
 
-            {/* ===== MONTHLY CALENDAR ===== */}
-            <div className={`schedule-calendar card ${calendarCollapsed ? 'calendar-compact' : ''}`}>
-                <div className="calendar-header">
-                    <button className="btn-icon" onClick={prevMonth}><Icon name="arrow-left" size={18} /></button>
-                    <h3 className="calendar-title">{MONTH_NAMES[currentMonth - 1]} {currentYear}</h3>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="btn-icon" onClick={nextMonth}><Icon name="arrow-right" size={18} /></button>
-                        <button className="btn-icon" onClick={() => setCalendarCollapsed(!calendarCollapsed)} title={calendarCollapsed ? 'Expand' : 'Collapse'}>
-                            <Icon name={calendarCollapsed ? 'chevron-down' : 'chevron-up'} size={16} />
-                        </button>
+            {/* ===== COMPACT CALENDAR ===== */}
+            <div className="card" style={{ padding: '12px 16px' }}>
+                {/* Top bar: Today + view tabs + nav */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', padding: '3px 10px' }} onClick={() => {
+                            const t = new Date();
+                            setCurrentMonth(t.getMonth() + 1);
+                            setCurrentYear(t.getFullYear());
+                            setSelectedDate(t.getDate());
+                            setRangeStart(null); setRangeEnd(null);
+                        }}>Today</button>
+                        <button className="btn-icon" onClick={prevMonth} style={{ padding: '2px' }}><Icon name="arrow-left" size={14} /></button>
+                        <button className="btn-icon" onClick={nextMonth} style={{ padding: '2px' }}><Icon name="arrow-right" size={14} /></button>
+                        <span style={{ fontSize: '0.88rem', fontWeight: 700, marginLeft: '4px' }}>
+                            {MONTH_NAMES[currentMonth - 1]} {currentYear}
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', overflow: 'hidden' }}>
+                        {[
+                            { key: 'day', label: 'Day' },
+                            { key: 'week', label: 'Week' },
+                            { key: '2week', label: '2 Wk' },
+                            { key: 'month', label: 'Month' },
+                        ].map(v => (
+                            <button
+                                key={v.key}
+                                onClick={() => { setCalendarView(v.key); setRangeStart(null); setRangeEnd(null); }}
+                                style={{
+                                    padding: '4px 12px', fontSize: '0.7rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                    background: calendarView === v.key ? 'var(--accent)' : 'transparent',
+                                    color: calendarView === v.key ? '#fff' : 'var(--text-secondary)',
+                                    transition: 'all 0.15s',
+                                }}
+                            >
+                                {v.label}
+                            </button>
+                        ))}
                     </div>
                 </div>
-                {!calendarCollapsed && (
-                    <>
-                        <div className="calendar-day-names">
-                            {DAY_NAMES.map(d => <div key={d} className="calendar-day-name">{d}</div>)}
-                        </div>
-                        <div className="calendar-grid">
-                            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                                <div key={`empty-${i}`} className="calendar-day empty" />
-                            ))}
-                            {Array.from({ length: daysInMonth }).map((_, i) => {
-                                const day = i + 1;
-                                const info = getDayInfo(day);
-                                const isToday = isCurrentMonth && day === todayDate;
-                                const isSelected = day === selectedDate;
-                                const hasActivity = info.hasSessions || info.hasBlocks || info.hasScheduledTasks;
-                                return (
-                                    <div
-                                        key={day}
-                                        className={`calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${hasActivity ? 'has-activity' : ''} ${info.isException ? 'exception' : ''}`}
-                                        onClick={() => setSelectedDate(day)}
-                                        onContextMenu={(e) => {
-                                            e.preventDefault();
-                                            if (info.hasBlocks && !info.isException) handleMarkException(day);
-                                        }}
-                                    >
-                                        <span className="calendar-day-number">{day}</span>
-                                        {info.colors.length > 0 && (
-                                            <div className="calendar-day-dots">
-                                                {info.colors.slice(0, 3).map((c, ci) => (
-                                                    <span key={ci} className="calendar-dot" style={{ backgroundColor: c }} />
-                                                ))}
-                                            </div>
-                                        )}
-                                        {info.isException && <span className="calendar-exception-mark">✕</span>}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
-                )}
-                {calendarCollapsed && selectedDate && (
-                    <div style={{ padding: '8px 0', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        Selected: <strong>{MONTH_NAMES[currentMonth - 1]} {selectedDate}</strong>
+
+                {/* Range indicator */}
+                {rangeStart && rangeEnd && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--accent)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Icon name="calendar" size={12} />
+                        <span>
+                            {new Date(rangeStart).toLocaleDateString([], { month: 'short', day: 'numeric' })} – {new Date(rangeEnd).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </span>
+                        <button className="btn-icon" style={{ padding: '1px 4px', fontSize: '0.65rem' }} onClick={() => { setRangeStart(null); setRangeEnd(null); }}>
+                            <Icon name="close" size={10} />
+                        </button>
                     </div>
                 )}
+
+                {/* Calendar grid */}
+                {(() => {
+                    // Build array of dates to show based on view
+                    let viewDates = [];
+                    const todayObj = new Date();
+                    const todayISO = todayObj.toISOString().split('T')[0];
+
+                    if (calendarView === 'day') {
+                        const d = selectedDate
+                            ? new Date(currentYear, currentMonth - 1, selectedDate)
+                            : todayObj;
+                        viewDates = [d];
+                    } else if (calendarView === 'week') {
+                        // Show the week containing selected date (or today)
+                        const anchor = selectedDate
+                            ? new Date(currentYear, currentMonth - 1, selectedDate)
+                            : todayObj;
+                        const dayOfWeek = anchor.getDay();
+                        const weekStart = new Date(anchor);
+                        weekStart.setDate(weekStart.getDate() - dayOfWeek);
+                        for (let i = 0; i < 7; i++) {
+                            const d = new Date(weekStart);
+                            d.setDate(weekStart.getDate() + i);
+                            viewDates.push(d);
+                        }
+                    } else if (calendarView === '2week') {
+                        const anchor = selectedDate
+                            ? new Date(currentYear, currentMonth - 1, selectedDate)
+                            : todayObj;
+                        const dayOfWeek = anchor.getDay();
+                        const weekStart = new Date(anchor);
+                        weekStart.setDate(weekStart.getDate() - dayOfWeek);
+                        for (let i = 0; i < 14; i++) {
+                            const d = new Date(weekStart);
+                            d.setDate(weekStart.getDate() + i);
+                            viewDates.push(d);
+                        }
+                    } else {
+                        // Month view — show full month grid
+                        // Leading empty days from prev month
+                        const prevMonthDays = new Date(currentYear, currentMonth - 1, 0).getDate();
+                        for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+                            viewDates.push({ date: new Date(currentYear, currentMonth - 2, prevMonthDays - i), faded: true });
+                        }
+                        for (let i = 1; i <= daysInMonth; i++) {
+                            viewDates.push({ date: new Date(currentYear, currentMonth - 1, i), faded: false });
+                        }
+                        // Trailing days
+                        const remaining = 7 - (viewDates.length % 7);
+                        if (remaining < 7) {
+                            for (let i = 1; i <= remaining; i++) {
+                                viewDates.push({ date: new Date(currentYear, currentMonth, i), faded: true });
+                            }
+                        }
+                    }
+
+                    // Normalize dates
+                    const dates = viewDates.map(d => {
+                        const dateObj = d instanceof Date ? d : d.date;
+                        const faded = d instanceof Date ? false : d.faded;
+                        return { dateObj, faded };
+                    });
+
+                    // Day click handler with range support
+                    const handleDayClick = (dateObj) => {
+                        const clickedDay = dateObj.getDate();
+                        const clickedMonth = dateObj.getMonth() + 1;
+                        const clickedYear = dateObj.getFullYear();
+                        const iso = dateObj.toISOString().split('T')[0];
+
+                        // Update month/year if clicking a faded date
+                        if (clickedMonth !== currentMonth || clickedYear !== currentYear) {
+                            setCurrentMonth(clickedMonth);
+                            setCurrentYear(clickedYear);
+                        }
+                        setSelectedDate(clickedDay);
+
+                        // Range selection: shift+click or second click builds range
+                        if (rangeStart && !rangeEnd) {
+                            const start = rangeStart < iso ? rangeStart : iso;
+                            const end = rangeStart < iso ? iso : rangeStart;
+                            setRangeStart(start);
+                            setRangeEnd(end);
+                        } else {
+                            setRangeStart(iso);
+                            setRangeEnd(null);
+                        }
+                    };
+
+                    return (
+                        <>
+                            {/* Day name headers */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: calendarView === 'day' ? '1fr' : 'repeat(7, 1fr)',
+                                gap: '0', textAlign: 'center',
+                            }}>
+                                {calendarView !== 'day' && DAY_NAMES.map(d => (
+                                    <div key={d} style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', padding: '4px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{d}</div>
+                                ))}
+                            </div>
+
+                            {/* Date cells */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: calendarView === 'day' ? '1fr' : 'repeat(7, 1fr)',
+                                gap: '1px',
+                            }}>
+                                {dates.map(({ dateObj, faded }, idx) => {
+                                    const iso = dateObj.toISOString().split('T')[0];
+                                    const day = dateObj.getDate();
+                                    const isToday = iso === todayISO;
+                                    const isSelected = dateObj.getMonth() + 1 === currentMonth && day === selectedDate && dateObj.getFullYear() === currentYear;
+                                    const inRange = rangeStart && rangeEnd && iso >= rangeStart && iso <= rangeEnd;
+                                    const isRangeEdge = iso === rangeStart || iso === rangeEnd;
+
+                                    // Get activity dots from getDayInfo if in current month
+                                    let info = { colors: [], hasSessions: false, hasBlocks: false, isException: false };
+                                    if (dateObj.getMonth() + 1 === currentMonth && dateObj.getFullYear() === currentYear) {
+                                        info = getDayInfo(day);
+                                    }
+                                    const hasActivity = info.hasSessions || info.hasBlocks || info.hasScheduledTasks;
+
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => handleDayClick(dateObj)}
+                                            style={{
+                                                padding: calendarView === 'day' ? '10px' : '6px 2px',
+                                                textAlign: 'center',
+                                                cursor: 'pointer',
+                                                borderRadius: '6px',
+                                                position: 'relative',
+                                                transition: 'all 0.1s',
+                                                opacity: faded ? 0.35 : 1,
+                                                background: isSelected
+                                                    ? 'var(--accent)'
+                                                    : inRange
+                                                        ? 'rgba(99, 102, 241, 0.12)'
+                                                        : 'transparent',
+                                                border: isRangeEdge && !isSelected ? '1px solid var(--accent)' : '1px solid transparent',
+                                            }}
+                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = inRange ? 'rgba(99, 102, 241, 0.12)' : 'transparent'; }}
+                                        >
+                                            <div style={{
+                                                fontSize: calendarView === 'day' ? '1.1rem' : '0.78rem',
+                                                fontWeight: isToday ? 800 : 500,
+                                                color: isSelected ? '#fff' : isToday ? 'var(--accent)' : 'var(--text-primary)',
+                                                width: calendarView === 'day' ? 'auto' : '28px',
+                                                height: calendarView === 'day' ? 'auto' : '28px',
+                                                lineHeight: calendarView === 'day' ? 'normal' : '28px',
+                                                margin: '0 auto',
+                                                borderRadius: '50%',
+                                                background: isToday && !isSelected ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                                            }}>
+                                                {calendarView === 'day'
+                                                    ? `${DAY_NAMES[dateObj.getDay()]}, ${MONTH_NAMES[dateObj.getMonth()]} ${day}`
+                                                    : day}
+                                            </div>
+                                            {/* Activity dots */}
+                                            {calendarView !== 'day' && hasActivity && (
+                                                <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '1px', minHeight: '4px' }}>
+                                                    {info.colors.slice(0, 3).map((c, ci) => (
+                                                        <span key={ci} style={{ width: '4px', height: '4px', borderRadius: '50%', background: isSelected ? 'rgba(255,255,255,0.8)' : c }} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {info.isException && <span style={{ position: 'absolute', top: '1px', right: '3px', fontSize: '0.55rem', color: 'var(--color-danger)' }}>✕</span>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    );
+                })()}
             </div>
 
             {/* ===== DAY VIEW ===== */}
