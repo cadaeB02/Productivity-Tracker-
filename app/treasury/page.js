@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions, getAllProjects, uploadDocument } from '@/lib/store';
+import { getCompanies, getTransactions, addTransaction, updateTransaction, deleteTransaction, getSessions, getAllProjects, uploadDocument, matchVendorByName } from '@/lib/store';
 
 const EXPENSE_CATEGORIES = ['Operations', 'Software', 'Marketing', 'Legal', 'Payroll', 'Supplies', 'Travel', 'Other'];
 const REVENUE_CATEGORIES = ['Services', 'Product Sales', 'Consulting', 'Contract', 'Paycheck', 'Recurring', 'Other'];
@@ -309,6 +309,14 @@ export default function TreasuryPage() {
         try {
             const savedTxns = [];
             for (const item of selected) {
+                // Auto-match vendor
+                let vendorId = null;
+                if (item.vendor && (item.company_id || activeCompanyId)) {
+                    try {
+                        const matched = await matchVendorByName(item.vendor, item.company_id || activeCompanyId);
+                        if (matched) vendorId = matched.id;
+                    } catch (e) { /* ignore match errors */ }
+                }
                 const txn = await addTransaction({
                     type: item.type === 'revenue' ? 'revenue' : 'expense',
                     amount: parseFloat(item.amount) || 0,
@@ -317,6 +325,7 @@ export default function TreasuryPage() {
                     company_id: item.company_id || activeCompanyId,
                     date: item.date || new Date().toISOString().split('T')[0],
                     is_recurring: item.is_recurring || false,
+                    vendor_id: vendorId,
                 });
                 savedTxns.push(txn);
             }

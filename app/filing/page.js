@@ -101,7 +101,7 @@ export default function FilingPage() {
     const [activeTab, setActiveTab] = useState('all');
     const [uploading, setUploading] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
-    const [uploadForm, setUploadForm] = useState({ category: 'general', description: '', company_id: '' });
+    const [uploadForm, setUploadForm] = useState({ category: 'general', description: '', company_id: '', vendor_id: '' });
     const fileInputRef = useRef(null);
     const [docCounts, setDocCounts] = useState({});
     const [previewDoc, setPreviewDoc] = useState(null);
@@ -236,10 +236,11 @@ export default function FilingPage() {
                 company_id: companyId,
                 category: uploadForm.category,
                 description: uploadForm.description,
+                vendor_id: uploadForm.vendor_id || null,
             });
 
             setShowUpload(false);
-            setUploadForm({ category: 'general', description: '', company_id: '' });
+            setUploadForm({ category: 'general', description: '', company_id: '', vendor_id: '' });
             if (fileInputRef.current) fileInputRef.current.value = '';
             loadDocs();
             loadCounts();
@@ -491,7 +492,7 @@ export default function FilingPage() {
                                     value={uploadForm.category}
                                     onChange={(e) => setUploadForm(f => ({ ...f, category: e.target.value }))}
                                 >
-                                    {DOC_CATEGORIES.filter(c => c.key !== 'all' && c.key !== 'flagged').map(c => (
+                                    {DOC_CATEGORIES.filter(c => c.key !== 'all' && c.key !== 'flagged' && c.key !== 'techstack').map(c => (
                                         <option key={c.key} value={c.key}>{c.label}</option>
                                     ))}
                                 </select>
@@ -521,6 +522,21 @@ export default function FilingPage() {
                                     onChange={(e) => setUploadForm(f => ({ ...f, description: e.target.value }))}
                                 />
                             </div>
+                            {vendors.length > 0 && (
+                                <div className="input-group">
+                                    <label>Vendor (optional)</label>
+                                    <select
+                                        className="input"
+                                        value={uploadForm.vendor_id}
+                                        onChange={(e) => setUploadForm(f => ({ ...f, vendor_id: e.target.value }))}
+                                    >
+                                        <option value="">No vendor</option>
+                                        {vendors.map(v => (
+                                            <option key={v.id} value={v.id}>{v.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
                         {hasApiKey() && (
                             <div style={{
