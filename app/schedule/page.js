@@ -176,6 +176,29 @@ export default function SchedulePage() {
         setShiftsLoading(false);
     }, [getFeeds]);
 
+    // Apple Calendar (synced from Mac)
+    const [appleCalEvents, setAppleCalEvents] = useState(null);
+    const [appleCalLoading, setAppleCalLoading] = useState(false);
+    const [appleCalSyncedAt, setAppleCalSyncedAt] = useState(null);
+
+    const loadAppleCalendar = useCallback(async () => {
+        if (!user?.id) return;
+        setAppleCalLoading(true);
+        try {
+            const res = await fetch(`/api/apple-calendar?uid=${user.id}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.events && data.events.length > 0) {
+                    setAppleCalEvents(data.events);
+                    setAppleCalSyncedAt(data.synced_at);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load Apple Calendar', err);
+        }
+        setAppleCalLoading(false);
+    }, [user?.id]);
+
     const timelineRef = useRef(null);
 
     const loadMonthData = useCallback(async () => {
@@ -205,7 +228,8 @@ export default function SchedulePage() {
 
     useEffect(() => {
         loadMonthData();
-    }, [loadMonthData]);
+        loadAppleCalendar();
+    }, [loadMonthData, loadAppleCalendar]);
 
     // Load day-specific data when a date is selected
     useEffect(() => {
@@ -1322,6 +1346,102 @@ export default function SchedulePage() {
                         })()}
                     </>
                 )}
+            </div>
+
+            {/* ===== APPLE CALENDAR ===== */}
+            <div className="card" style={{ marginTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Icon name="calendar" size={16} /> Apple Calendar
+                        {appleCalEvents && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                ({appleCalEvents.length} event{appleCalEvents.length !== 1 ? 's' : ''})
+                            </span>
+                        )}
+                    </h3>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        {appleCalSyncedAt && (
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                Synced {new Date(appleCalSyncedAt).toLocaleString([], { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })}
+                            </span>
+                        )}
+                        <button className="btn btn-secondary btn-sm" onClick={loadAppleCalendar} disabled={appleCalLoading}>
+                            <Icon name="zap" size={12} /> {appleCalLoading ? 'Loading...' : 'Refresh'}
+                        </button>
+                    </div>
+                </div>
+
+                {!appleCalEvents ? (
+                    <div style={{ padding: '16px', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        <div style={{ marginBottom: '8px' }}>Apple Calendar syncs automatically from your Mac every 15 minutes.</div>
+                        <button className="btn btn-primary btn-sm" onClick={loadAppleCalendar}>
+                            <Icon name="zap" size={12} /> Check for synced events
+                        </button>
+                        <div style={{ marginTop: '10px', fontSize: '0.7rem', opacity: 0.7 }}>
+                            Not seeing events? Run the sync script on your Mac:<br/>
+                            <code style={{ fontSize: '0.68rem', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px' }}>
+                                HOLDCO_USER_ID=your-id ./scripts/sync-apple-calendar.sh
+                            </code>
+                        </div>
+                    </div>
+                ) : (() => {
+                    // Group events by date, show upcoming
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const upcoming = appleCalEvents
+                        .filter(e => e.date >= todayStr && !e.allDay)
+                        .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+                        .slice(0, 20);
+                    const calColors = {
+                        'Work': '#3b82f6', 'Personal Stuff': '#a855f7', 'Home': '#10b981',
+                        'Love 🫶🏼': '#ec4899', 'Calendar': '#6366f1', 'Scheduled Reminders': '#f59e0b',
+                    };
+
+                    // Group by date
+                    const byDate = {};
+                    upcoming.forEach(e => {
+                        if (!byDate[e.date]) byDate[e.date] = [];
+                        byDate[e.date].push(e);
+                    });
+
+                    return (
+                        <div>
+                            {Object.entries(byDate).slice(0, 7).map(([date, events]) => (
+                                <div key={date} style={{ marginBottom: '10px' }}>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                                        {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                    </div>
+                                    {events.map((ev, i) => (
+                                        <div key={i} style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                                            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                                            marginBottom: '3px',
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{
+                                                    width: '6px', height: '6px', borderRadius: '50%',
+                                                    background: calColors[ev.calendar] || '#6366f1',
+                                                }} />
+                                                <span style={{ fontSize: '0.82rem', fontWeight: 500 }}>{ev.summary}</span>
+                                                <span style={{ fontSize: '0.6rem', background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                                                    {ev.calendar}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                                {ev.startTime} → {ev.endTime}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                            {upcoming.length === 0 && (
+                                <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                    No upcoming events found.
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* ===== AI SCHEDULER CHAT ===== */}
