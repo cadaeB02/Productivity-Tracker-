@@ -5455,67 +5455,272 @@ textarea.input {
 /* ==================== iOS TOUCH OPTIMIZATIONS ==================== */
 
 @media (max-width: 768px) {
-    /* Larger touch targets for all interactive elements */
+    /* ── Base Layout ── */
+    .main-content {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 20px)) !important;
+    }
+
+    /* ── Larger touch targets ── */
     .btn, .btn-sm {
         min-height: 44px;
         min-width: 44px;
     }
 
-    /* Cards get larger padding on mobile */
+    /* ── Cards: mobile-optimized ── */
     .card {
-        padding: 18px;
+        padding: 16px;
         border-radius: 14px;
     }
 
-    /* Page headers adjust for mobile without stacked header bar */
+    /* ── Page headers ── */
     .page-header {
-        padding-top: env(safe-area-inset-top, 8px);
+        padding: env(safe-area-inset-top, 8px) 0 12px 0;
     }
 
     .page-header h2 {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
     }
 
-    /* Stats grid: 2 cols on mobile */
+    .page-header p {
+        font-size: 0.8rem;
+    }
+
+    /* ── Stats grid: 2 cols ── */
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
     }
 
-    /* Timer display larger on mobile */
+    .stat-card {
+        padding: 14px;
+    }
+
+    .stat-label {
+        font-size: 0.68rem;
+    }
+
+    .stat-value {
+        font-size: 1.15rem;
+    }
+
+    /* ── Timer Page: Hero Layout ── */
     .timer-display {
         font-size: 3.5rem;
+        padding: 16px 0;
     }
 
-    /* Session cards larger */
+    .active-sessions-section {
+        margin-bottom: 16px;
+    }
+
+    .active-sessions-title {
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+    }
+
+    .active-sessions-grid {
+        gap: 10px;
+    }
+
+    /* Session cards: full-width touch-friendly */
     .session-card {
         border-radius: 16px;
+        padding: 16px;
     }
 
-    /* Active sessions section */
-    .active-sessions-grid {
-        gap: 12px;
+    .session-card-timer {
+        font-size: 1.8rem;
+        padding: 10px 0;
     }
 
-    /* Company tiles full width on mobile */
+    .session-card-actions {
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    .session-card-actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    /* ── Company tiles: stacked ── */
     .company-tile-grid {
         grid-template-columns: 1fr;
     }
 
-    /* Nav links in sidebar larger touch */
+    /* ── Modals → Bottom Sheets on mobile ── */
+    .modal-overlay {
+        align-items: flex-end;
+    }
+
+    .modal {
+        width: 100%;
+        max-width: 100%;
+        max-height: 92vh;
+        border-radius: 20px 20px 0 0;
+        padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 12px));
+        animation: slideUpSheet 350ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal h3 {
+        font-size: 1.1rem;
+        margin-bottom: 16px;
+    }
+
+    .modal::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--border-default);
+        border-radius: 2px;
+        margin: 0 auto 16px;
+    }
+
+    .modal-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    .modal-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* ── Forms: mobile optimized ── */
+    .input, select.input {
+        min-height: 44px;
+        font-size: 16px; /* Prevents iOS zoom */
+    }
+
+    input, select, textarea {
+        font-size: 16px;
+    }
+
+    .input-group label {
+        font-size: 0.75rem;
+    }
+
+    /* Stack form grids on narrow screens */
+    form [style*="gridTemplateColumns"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── Navigation links ── */
     .nav-link {
         padding: 14px 16px;
         min-height: 48px;
     }
 
-    /* Input fields larger */
-    .input, select.input {
-        min-height: 44px;
-        font-size: 16px; /* Prevents iOS zoom on focus */
+    /* ── Tables: horizontal scroll ── */
+    .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
-    /* Prevent iOS text zoom on any form inputs */
-    input, select, textarea {
-        font-size: 16px;
+    /* ── Context switch badge ── */
+    .context-switch-badge {
+        font-size: 0.72rem;
+        padding: 4px 10px;
+    }
+
+    /* ── Treasury receipt scanner ── */
+    .receipt-scanner-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── Transaction rows: tighter ── */
+    .transaction-row {
+        padding: 12px;
+    }
+
+    /* ── Settings sections ── */
+    .settings-section .card {
+        padding: 16px;
+    }
+
+    /* ── Agent chat ── */
+    .agent-messages {
+        max-height: 50vh;
+    }
+
+    /* ── History/Stats ── */
+    .history-controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* ── Compact header spacing ── */
+    h3 {
+        font-size: 0.92rem;
+    }
+
+    /* ── Badge sizing ── */
+    .badge {
+        font-size: 0.65rem;
+        padding: 3px 8px;
+    }
+}
+
+/* Bottom sheet slide-up animation */
+@keyframes slideUpSheet {
+    from {
+        transform: translateY(100%);
+        opacity: 0.5;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* ── Extra-small screens (iPhone SE, etc.) ── */
+@media (max-width: 380px) {
+    .timer-display {
+        font-size: 2.8rem;
+    }
+
+    .session-card-timer {
+        font-size: 1.5rem;
+    }
+
+    .page-header h2 {
+        font-size: 1.2rem;
+    }
+
+    .stats-grid {
+        gap: 6px;
+    }
+
+    .stat-card {
+        padding: 10px;
+    }
+
+    .stat-value {
+        font-size: 1rem;
+    }
+
+    .card {
+        padding: 12px;
+    }
+}
+
+/* ── Landscape phone ── */
+@media (max-height: 500px) and (orientation: landscape) {
+    .bottom-tab-bar {
+        height: 52px;
+    }
+
+    .tab-item {
+        gap: 1px;
+    }
+
+    .tab-label {
+        font-size: 0.55rem;
+    }
+
+    .modal {
+        max-height: 95vh;
     }
 }
 
@@ -5526,4 +5731,33 @@ textarea.input {
 
 .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── iOS momentum scroll for overflowing content ── */
+.scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+}
+
+/* ── Pull-to-refresh visual hint ── */
+.pull-indicator {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .pull-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        gap: 6px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .pull-indicator.visible {
+        opacity: 1;
+    }
 }
