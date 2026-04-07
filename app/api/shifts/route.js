@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+const TZ = 'America/Denver';
+
 // Parse iCal (.ics) feed from WhenIWork
 function parseICS(icsText) {
     const events = [];
@@ -15,18 +17,26 @@ function parseICS(icsText) {
         } else if (current) {
             const colonIdx = line.indexOf(':');
             if (colonIdx === -1) continue;
-            const key = line.substring(0, colonIdx).split(';')[0];
+            // Handle DTSTART;TZID=...:20260407T092500 format
+            const fullKey = line.substring(0, colonIdx);
+            const key = fullKey.split(';')[0];
             const value = line.substring(colonIdx + 1);
+
+            // Extract TZID if present
+            const tzMatch = fullKey.match(/TZID=([^;:]+)/);
 
             switch (key) {
                 case 'SUMMARY':
                     current.summary = value;
                     break;
                 case 'DTSTART':
-                    current.start = parseICalDate(value);
+                    current.start = parseICalDate(value, tzMatch?.[1]);
+                    current.startRaw = value;
+                    current.startTZ = tzMatch?.[1] || null;
                     break;
                 case 'DTEND':
-                    current.end = parseICalDate(value);
+                    current.end = parseICalDate(value, tzMatch?.[1]);
+                    current.endRaw = value;
                     break;
                 case 'LOCATION':
                     current.location = value;
@@ -43,8 +53,8 @@ function parseICS(icsText) {
     return events;
 }
 
-function parseICalDate(str) {
-    // Format: 20260407T140000Z or 20260407T140000
+// Parse iCal date, preserving timezone info
+function parseICalDate(str, tzid) {
     if (!str) return null;
     const clean = str.replace(/[^0-9TZ]/g, '');
     const year = clean.substring(0, 4);
@@ -55,10 +65,71 @@ function parseICalDate(str) {
     const second = clean.substring(13, 15) || '00';
     const isUTC = clean.endsWith('Z');
     
-    if (isUTC) {
-        return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`).toISOString();
+    // Return a structured object with local time info
+    return {
+        iso: isUTC 
+            ? new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`).toISOString()
+            : `${year}-${month}-${day}T${hour}:${minute}:${second}`,
+        localDate: `${year}-${month}-${day}`,
+        localTime: `${hour}:${minute}`,
+        isUTC,
+        tzid: tzid || (isUTC ? 'UTC' : TZ),
+    };
+}
+
+// Format time for display in Mountain Time
+function formatTimeDisplay(dateObj) {
+    if (!dateObj) return null;
+    
+    if (!dateObj.isUTC) {
+        // Already in local time — just format it
+        const [h, m] = dateObj.localTime.split(':').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
     }
-    return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).toISOString();
+    
+    // UTC time — convert to Mountain Time
+    const d = new Date(dateObj.iso);
+    return d.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        hour12: true,
+        timeZone: TZ,
+    });
+}
+
+// Get local date in Mountain Time
+function getLocalDate(dateObj) {
+    if (!dateObj) return null;
+    
+    if (!dateObj.isUTC) {
+        return dateObj.localDate;
+    }
+    
+    // Convert UTC to Mountain Time date
+    const d = new Date(dateObj.iso);
+    return d.toLocaleDateString('en-CA', { timeZone: TZ }); // en-CA = YYYY-MM-DD
+}
+
+// Calculate duration in hours
+function getDuration(startObj, endObj) {
+    if (!startObj || !endObj) return null;
+    
+    if (!startObj.isUTC && !endObj.isUTC) {
+        // Both are local times — calculate from local time strings
+        const [sh, sm] = startObj.localTime.split(':').map(Number);
+        const [eh, em] = endObj.localTime.split(':').map(Number);
+        let startMins = sh * 60 + sm;
+        let endMins = eh * 60 + em;
+        if (endMins < startMins) endMins += 24 * 60; // crosses midnight
+        return Math.round((endMins - startMins) / 60 * 100) / 100;
+    }
+    
+    // At least one is UTC — use ISO dates
+    const start = new Date(startObj.iso);
+    const end = new Date(endObj.iso);
+    return Math.round((end - start) / 3600000 * 100) / 100;
 }
 
 // Detect employer from event summary/description
@@ -71,7 +142,6 @@ function detectEmployer(event) {
     if (text.includes('bentgate') || text.includes('mountaineering') || text.includes('bent gate')) {
         return 'Bentgate Mountaineering';
     }
-    // Return the summary as employer name if can't detect
     return event.summary || 'Unknown';
 }
 
@@ -84,10 +154,9 @@ export async function GET(request) {
             return NextResponse.json({ error: 'No iCal URL provided' }, { status: 400 });
         }
 
-        // Fetch the iCal feed
         const response = await fetch(icalUrl, {
             headers: { 'User-Agent': 'HoldCo-OS/1.0' },
-            next: { revalidate: 300 }, // Cache for 5 minutes
+            next: { revalidate: 300 },
         });
 
         if (!response.ok) {
@@ -97,25 +166,34 @@ export async function GET(request) {
         const icsText = await response.text();
         const events = parseICS(icsText);
 
+        // Deduplicate by UID
+        const seen = new Set();
+        const uniqueEvents = events.filter(e => {
+            if (!e.uid) return true;
+            if (seen.has(e.uid)) return false;
+            seen.add(e.uid);
+            return true;
+        });
+
         // Enrich with employer detection and format
-        const shifts = events.map(event => ({
+        const shifts = uniqueEvents.map(event => ({
             uid: event.uid,
             summary: event.summary || '',
             employer: detectEmployer(event),
-            start: event.start,
-            end: event.end,
+            start: event.start?.iso || null,
+            end: event.end?.iso || null,
             location: event.location || '',
-            description: event.description || '',
-            date: event.start ? event.start.split('T')[0] : null,
-            startTime: event.start ? new Date(event.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : null,
-            endTime: event.end ? new Date(event.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : null,
-            durationHours: event.start && event.end 
-                ? Math.round((new Date(event.end) - new Date(event.start)) / 3600000 * 100) / 100 
-                : null,
+            date: getLocalDate(event.start),
+            startTime: formatTimeDisplay(event.start),
+            endTime: formatTimeDisplay(event.end),
+            durationHours: getDuration(event.start, event.end),
         }));
 
-        // Sort by date descending (most recent first)
-        shifts.sort((a, b) => new Date(b.start) - new Date(a.start));
+        // Sort by date descending
+        shifts.sort((a, b) => {
+            if (a.date && b.date) return b.date.localeCompare(a.date);
+            return 0;
+        });
 
         return NextResponse.json({ 
             shifts,
