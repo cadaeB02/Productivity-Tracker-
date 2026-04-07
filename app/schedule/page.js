@@ -110,28 +110,71 @@ export default function SchedulePage() {
     const [filterCompany, setFilterCompany] = useState('all');
     const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
-    // WhenIWork shifts
+    // Calendar Feeds (multi-feed)
+    const FEEDS_KEY = 'holdco-ical-feeds';
     const [shiftsData, setShiftsData] = useState(null);
     const [shiftsLoading, setShiftsLoading] = useState(false);
     const [shiftLogTarget, setShiftLogTarget] = useState(null);
-    const [showIcalInput, setShowIcalInput] = useState(false);
-    const [icalUrlInput, setIcalUrlInput] = useState('');
+    const [showFeedManager, setShowFeedManager] = useState(false);
+    const [newFeedName, setNewFeedName] = useState('');
+    const [newFeedUrl, setNewFeedUrl] = useState('');
+
+    const getFeeds = useCallback(() => {
+        if (typeof window === 'undefined') return [];
+        try {
+            const stored = localStorage.getItem(FEEDS_KEY);
+            if (stored) return JSON.parse(stored);
+            // Migrate old single-feed format
+            const oldUrl = localStorage.getItem('holdco-ical-url');
+            if (oldUrl) {
+                const migrated = [{ name: 'WhenIWork', url: oldUrl }];
+                localStorage.setItem(FEEDS_KEY, JSON.stringify(migrated));
+                localStorage.removeItem('holdco-ical-url');
+                return migrated;
+            }
+            return [];
+        } catch { return []; }
+    }, []);
+
+    const saveFeeds = useCallback((feeds) => {
+        localStorage.setItem(FEEDS_KEY, JSON.stringify(feeds));
+    }, []);
 
     const loadShifts = useCallback(async () => {
-        const icalUrl = typeof window !== 'undefined' ? localStorage.getItem('holdco-ical-url') : null;
-        if (!icalUrl) return;
+        const feeds = getFeeds();
+        if (feeds.length === 0) return;
         setShiftsLoading(true);
         try {
-            const res = await fetch(`/api/shifts?url=${encodeURIComponent(icalUrl)}`);
-            if (res.ok) {
-                const data = await res.json();
-                setShiftsData(data);
+            const allShifts = [];
+            for (const feed of feeds) {
+                try {
+                    const res = await fetch(`/api/shifts?url=${encodeURIComponent(feed.url)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        // Tag each shift with feed source
+                        const tagged = (data.shifts || []).map(s => ({ ...s, feedName: feed.name }));
+                        allShifts.push(...tagged);
+                    }
+                } catch (err) {
+                    console.error(`Failed to load feed "${feed.name}":`, err);
+                }
             }
+            // Deduplicate across feeds by date+time+employer
+            const seen = new Set();
+            const unique = allShifts.filter(s => {
+                const key = `${s.date}|${s.startTime}|${s.employer}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            // Sort by date desc
+            unique.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            setShiftsData({ shifts: unique, count: unique.length, lastFetched: new Date().toISOString() });
         } catch (err) {
             console.error('Failed to load shifts', err);
         }
         setShiftsLoading(false);
-    }, []);
+    }, [getFeeds]);
 
     const timelineRef = useRef(null);
 
@@ -971,21 +1014,22 @@ export default function SchedulePage() {
                 </div>
             </div>
 
-            {/* ===== WHENIWORK SHIFTS ===== */}
+            {/* ===== CALENDAR FEEDS & SHIFTS ===== */}
             <div className="card" style={{ marginTop: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                     <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Icon name="clock" size={16} /> Work Shifts
+                        {getFeeds().length > 0 && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                ({getFeeds().length} feed{getFeeds().length > 1 ? 's' : ''})
+                            </span>
+                        )}
                     </h3>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => {
-                            const current = typeof window !== 'undefined' ? localStorage.getItem('holdco-ical-url') || '' : '';
-                            setIcalUrlInput(current);
-                            setShowIcalInput(true);
-                        }}>
-                            <Icon name="settings" size={12} /> {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url') ? 'Change Feed' : 'Connect iCal'}
+                        <button className="btn btn-ghost btn-sm" onClick={() => setShowFeedManager(!showFeedManager)}>
+                            <Icon name="settings" size={12} /> {showFeedManager ? 'Close' : 'Manage Feeds'}
                         </button>
-                        {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url') && (
+                        {getFeeds().length > 0 && (
                             <button className="btn btn-secondary btn-sm" onClick={loadShifts}>
                                 <Icon name="zap" size={12} /> Refresh
                             </button>
@@ -993,48 +1037,88 @@ export default function SchedulePage() {
                     </div>
                 </div>
 
-                {/* iCal URL Input Form */}
-                {showIcalInput && (
+                {/* Feed Manager */}
+                {showFeedManager && (
                     <div style={{
                         padding: '14px', borderRadius: 'var(--radius-md)',
                         background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
                         marginBottom: '12px',
                     }}>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                            Paste your iCal feed URL (.ics)
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                            Works with WhenIWork, Apple Calendar, Google Calendar, Outlook — any .ics feed
-                        </div>
-                        <input
-                            className="input"
-                            type="url"
-                            placeholder="https://app.wheniwork.com/calendar/...global.ics"
-                            value={icalUrlInput}
-                            onChange={e => setIcalUrlInput(e.target.value)}
-                            autoFocus
-                            style={{ marginBottom: '8px', fontSize: '0.82rem' }}
-                        />
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '10px' }}>Connected Feeds</div>
+
+                        {/* List existing feeds */}
+                        {getFeeds().map((feed, i) => (
+                            <div key={i} style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                                background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+                                marginBottom: '6px', gap: '8px',
+                            }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>{feed.name}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {feed.url}
+                                    </div>
+                                </div>
+                                <button className="btn-icon" style={{ color: 'var(--color-danger)', flexShrink: 0 }} onClick={() => {
+                                    const feeds = getFeeds().filter((_, idx) => idx !== i);
+                                    saveFeeds(feeds);
+                                    setShowFeedManager(true); // force re-render
+                                }}>
+                                    <Icon name="close" size={14} />
+                                </button>
+                            </div>
+                        ))}
+
+                        {getFeeds().length === 0 && (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '10px', textAlign: 'center', padding: '8px' }}>
+                                No feeds connected yet. Add your first one below.
+                            </div>
+                        )}
+
+                        {/* Add new feed */}
+                        <div style={{ marginTop: '10px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border-subtle)' }}>
+                            <div style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '6px' }}>Add Feed</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '6px', marginBottom: '6px' }}>
+                                <input
+                                    className="input"
+                                    placeholder="Feed name (e.g. WhenIWork)"
+                                    value={newFeedName}
+                                    onChange={e => setNewFeedName(e.target.value)}
+                                    style={{ fontSize: '0.82rem' }}
+                                />
+                                <input
+                                    className="input"
+                                    type="url"
+                                    placeholder="https://...global.ics"
+                                    value={newFeedUrl}
+                                    onChange={e => setNewFeedUrl(e.target.value)}
+                                    style={{ fontSize: '0.82rem' }}
+                                />
+                            </div>
                             <button className="btn btn-primary btn-sm" onClick={() => {
-                                if (icalUrlInput.trim()) {
-                                    localStorage.setItem('holdco-ical-url', icalUrlInput.trim());
-                                    setShowIcalInput(false);
+                                if (newFeedName.trim() && newFeedUrl.trim()) {
+                                    const feeds = [...getFeeds(), { name: newFeedName.trim(), url: newFeedUrl.trim() }];
+                                    saveFeeds(feeds);
+                                    setNewFeedName('');
+                                    setNewFeedUrl('');
                                     loadShifts();
                                 }
                             }}>
-                                <Icon name="save" size={12} /> Save & Load
+                                <Icon name="plus" size={12} /> Add Feed
                             </button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setShowIcalInput(false)}>Cancel</button>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                                Works with WhenIWork, Apple Calendar (shared), Google Calendar, Outlook — any .ics feed URL
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {!shiftsData && !showIcalInput ? (
+                {!shiftsData && !showFeedManager ? (
                     <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url')
+                        {getFeeds().length > 0
                             ? <><button className="btn btn-primary btn-sm" onClick={loadShifts}><Icon name="zap" size={12} /> Load Shifts</button></>
-                            : <>Connect your iCal feed to see scheduled shifts and work hours.</>
+                            : <><button className="btn btn-ghost btn-sm" onClick={() => setShowFeedManager(true)}><Icon name="plus" size={12} /> Add your first calendar feed</button></>
                         }
                     </div>
                 ) : shiftsLoading ? (
@@ -1179,7 +1263,10 @@ export default function SchedulePage() {
                                                         }} />
                                                         <div>
                                                             <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.employer}</div>
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{shift.date}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                                {shift.date}
+                                                                {shift.feedName && <span style={{ fontSize: '0.6rem', background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--border-subtle)' }}>{shift.feedName}</span>}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div style={{ textAlign: 'right' }}>
