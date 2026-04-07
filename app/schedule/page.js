@@ -1149,61 +1149,6 @@ export default function SchedulePage() {
                     <div style={{ textAlign: 'center', padding: '20px' }}><div className="loading-spinner" /></div>
                 ) : (
                     <>
-                        {/* Yesterday's shift prompt — itemized */}
-                        {(() => {
-                            const yesterday = new Date();
-                            yesterday.setDate(yesterday.getDate() - 1);
-                            const yesterdayStr = yesterday.toISOString().split('T')[0];
-                            const yesterdayShifts = shiftsData?.shifts?.filter(s => s.date === yesterdayStr) || [];
-                            if (yesterdayShifts.length === 0) return null;
-
-                            return (
-                                <div style={{ marginBottom: '12px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                        <Icon name="sparkle" size={14} style={{ color: 'var(--color-accent)' }} />
-                                        <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Did you work yesterday?</span>
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({yesterdayShifts.length} shift{yesterdayShifts.length > 1 ? 's' : ''})</span>
-                                    </div>
-                                    {yesterdayShifts.map((shift, i) => (
-                                        <div key={i} style={{
-                                            padding: '12px', borderRadius: 'var(--radius-md)',
-                                            background: 'rgba(99, 102, 241, 0.06)',
-                                            border: '1px solid rgba(99, 102, 241, 0.15)',
-                                            marginBottom: '6px',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                            flexWrap: 'wrap', gap: '8px',
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <div style={{
-                                                    width: '10px', height: '10px', borderRadius: '50%',
-                                                    background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
-                                                }} />
-                                                <div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{shift.employer}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                        {shift.startTime} → {shift.endTime} ({shift.durationHours}h scheduled)
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '6px' }}>
-                                                <button className="btn btn-primary btn-sm" onClick={() => setShiftLogTarget(shift)}>
-                                                    <Icon name="check" size={12} /> Log This Shift
-                                                </button>
-                                                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                                                    <Icon name="upload" size={12} /> Screenshot
-                                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (!file) return;
-                                                        alert(`Screenshot "${file.name}" saved for ${shift.employer}. Upload to Filing for permanent storage.`);
-                                                    }} />
-                                                </label>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
-
                         {/* Shift Log Form */}
                         {shiftLogTarget && (
                             <div style={{
@@ -1212,7 +1157,7 @@ export default function SchedulePage() {
                                 marginBottom: '12px',
                             }}>
                                 <h4 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '10px' }}>
-                                    Log Hours — {shiftLogTarget.employer}
+                                    Log Hours — {shiftLogTarget.employer} — {shiftLogTarget.date}
                                 </h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '10px' }}>
                                     <div className="input-group">
@@ -1223,29 +1168,27 @@ export default function SchedulePage() {
                                         </select>
                                     </div>
                                     <div className="input-group">
-                                        <label>Start Time</label>
-                                        <input className="input" type="time" id="shift-log-start" defaultValue={shiftLogTarget.start ? new Date(shiftLogTarget.start).toTimeString().slice(0,5) : '09:00'} style={{ fontSize: '0.82rem' }} />
+                                        <label>Start</label>
+                                        <input className="input" id="shift-log-start" type="time" defaultValue={shiftLogTarget.startTime ? (() => { const [t, p] = shiftLogTarget.startTime.split(' '); const [h, m] = t.split(':'); const hr = p === 'PM' && h !== '12' ? parseInt(h)+12 : p === 'AM' && h === '12' ? 0 : parseInt(h); return `${String(hr).padStart(2,'0')}:${m}`; })() : ''} style={{ fontSize: '0.82rem' }} />
                                     </div>
                                     <div className="input-group">
-                                        <label>End Time</label>
-                                        <input className="input" type="time" id="shift-log-end" defaultValue={shiftLogTarget.end ? new Date(shiftLogTarget.end).toTimeString().slice(0,5) : '17:00'} style={{ fontSize: '0.82rem' }} />
+                                        <label>End</label>
+                                        <input className="input" id="shift-log-end" type="time" defaultValue={shiftLogTarget.endTime ? (() => { const [t, p] = shiftLogTarget.endTime.split(' '); const [h, m] = t.split(':'); const hr = p === 'PM' && h !== '12' ? parseInt(h)+12 : p === 'AM' && h === '12' ? 0 : parseInt(h); return `${String(hr).padStart(2,'0')}:${m}`; })() : ''} style={{ fontSize: '0.82rem' }} />
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button className="btn btn-primary btn-sm" onClick={async () => {
                                         const employer = document.getElementById('shift-log-employer')?.value;
-                                        const startTime = document.getElementById('shift-log-start')?.value;
-                                        const endTime = document.getElementById('shift-log-end')?.value;
-                                        const date = shiftLogTarget.date || new Date().toISOString().split('T')[0];
-                                        if (!startTime || !endTime) return;
+                                        const startVal = document.getElementById('shift-log-start')?.value;
+                                        const endVal = document.getElementById('shift-log-end')?.value;
                                         try {
                                             await addScheduleBlock({
-                                                date,
-                                                start_time: startTime,
-                                                end_time: endTime,
-                                                label: employer || shiftLogTarget.employer,
-                                                color: employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
-                                                block_type: 'physical_job',
+                                                title: `${employer} Shift`,
+                                                date: shiftLogTarget.date,
+                                                start_time: startVal,
+                                                end_time: endVal,
+                                                category: 'work',
+                                                company: employer,
                                                 is_recurring: false,
                                                 recurring_days: [],
                                             });
@@ -1262,91 +1205,74 @@ export default function SchedulePage() {
                             </div>
                         )}
 
-                        {/* Upcoming Shifts */}
+                        {/* Shifts grouped by date */}
                         {(() => {
                             const todayStr = new Date().toISOString().split('T')[0];
-                            const upcoming = shiftsData?.shifts?.filter(s => s.date >= todayStr).reverse() || [];
-                            const past = shiftsData?.shifts?.filter(s => s.date < todayStr).slice(0, 5) || [];
+                            const yesterdayDate = new Date();
+                            yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+                            const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+                            const allShifts = shiftsData?.shifts || [];
+                            const byDate = {};
+                            allShifts.forEach(s => {
+                                if (!s.date) return;
+                                if (!byDate[s.date]) byDate[s.date] = [];
+                                byDate[s.date].push(s);
+                            });
+                            const sortedDates = Object.keys(byDate).sort();
+                            if (sortedDates.length === 0) return <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>No shifts found.</div>;
 
-                            return (
-                                <>
-                                    {upcoming.length > 0 && (
-                                        <div style={{ marginBottom: '12px' }}>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Upcoming</div>
-                                            {upcoming.map((shift, i) => (
-                                                <div key={i} style={{
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-                                                    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                                                    marginBottom: '4px',
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <div style={{
-                                                            width: '8px', height: '8px', borderRadius: '50%',
-                                                            background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
-                                                        }} />
-                                                        <div>
-                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.employer}</div>
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                                {shift.date}
-                                                                {shift.feedName && <span style={{ fontSize: '0.6rem', background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--border-subtle)' }}>{shift.feedName}</span>}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.startTime} → {shift.endTime}</div>
-                                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{shift.durationHours}h</div>
-                                                    </div>
+                            return sortedDates.map(date => {
+                                const shifts = byDate[date];
+                                const isPast = date < todayStr;
+                                const isToday = date === todayStr;
+                                const isYesterday = date === yesterdayStr;
+                                const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                return (
+                                    <div key={date} style={{ marginBottom: '2px' }}>
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '8px 10px',
+                                            background: isToday ? 'rgba(99, 102, 241, 0.1)' : isYesterday ? 'rgba(245, 158, 11, 0.06)' : 'transparent',
+                                            borderRadius: 'var(--radius-sm)',
+                                            borderLeft: isToday ? '3px solid var(--color-accent)' : isYesterday ? '3px solid #f59e0b' : '3px solid transparent',
+                                        }}>
+                                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: isToday ? 'var(--color-accent)' : 'var(--text-primary)' }}>
+                                                {isToday ? '📍 Today' : isYesterday ? '⚡ Yesterday' : dateLabel}
+                                            </span>
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
+                                                {shifts.reduce((sum, s) => sum + (s.durationHours || 0), 0)}h
+                                            </span>
+                                        </div>
+                                        {shifts.map((shift, i) => (
+                                            <div key={i} style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                padding: '5px 10px 5px 20px', opacity: isPast && !isYesterday ? 0.5 : 1,
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6' }} />
+                                                    <span style={{ fontSize: '0.82rem' }}>{shift.employer}</span>
+                                                    {shift.feedName && <span style={{ fontSize: '0.58rem', background: 'var(--bg-elevated)', padding: '1px 4px', borderRadius: '3px', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>{shift.feedName}</span>}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {past.length > 0 && (
-                                        <div>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Recent</div>
-                                            {past.map((shift, i) => (
-                                                <div key={i} style={{
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-                                                    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                                                    marginBottom: '4px', opacity: 0.7,
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <div style={{
-                                                            width: '8px', height: '8px', borderRadius: '50%',
-                                                            background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
-                                                        }} />
-                                                        <div>
-                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.employer}</div>
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{shift.date}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ textAlign: 'right' }}>
-                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.startTime} → {shift.endTime}</div>
-                                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{shift.durationHours}h</div>
-                                                        </div>
-                                                        <button className="btn-icon" title="Log these hours" onClick={() => setShiftLogTarget(shift)}>
-                                                            <Icon name="plus" size={12} />
-                                                        </button>
-                                                    </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace" }}>{shift.startTime} → {shift.endTime}</span>
+                                                    <button className="btn-icon" title="Edit/Log" onClick={() => setShiftLogTarget(shift)} style={{ opacity: 0.4 }}><Icon name="edit" size={11} /></button>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {upcoming.length === 0 && past.length === 0 && (
-                                        <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                                            No shifts found in the feed.
-                                        </div>
-                                    )}
-                                </>
-                            );
+                                            </div>
+                                        ))}
+                                        {isYesterday && (
+                                            <div style={{ padding: '3px 10px 8px 20px', display: 'flex', gap: '6px' }}>
+                                                <button className="btn btn-primary btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => setShiftLogTarget(shifts[0])}><Icon name="check" size={10} /> Log Hours</button>
+                                                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', fontSize: '0.72rem' }}><Icon name="upload" size={10} /> Screenshot<input type="file" accept="image/*" style={{ display: 'none' }} onChange={() => {}} /></label>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            });
                         })()}
                     </>
                 )}
             </div>
+
 
             {/* ===== APPLE CALENDAR ===== */}
             <div className="card" style={{ marginTop: '16px' }}>
