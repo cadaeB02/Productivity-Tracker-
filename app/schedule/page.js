@@ -108,6 +108,27 @@ export default function SchedulePage() {
     const [filterCompany, setFilterCompany] = useState('all');
     const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
+    // WhenIWork shifts
+    const [shiftsData, setShiftsData] = useState(null);
+    const [shiftsLoading, setShiftsLoading] = useState(false);
+    const [shiftLogTarget, setShiftLogTarget] = useState(null);
+
+    const loadShifts = useCallback(async () => {
+        const icalUrl = typeof window !== 'undefined' ? localStorage.getItem('holdco-ical-url') : null;
+        if (!icalUrl) return;
+        setShiftsLoading(true);
+        try {
+            const res = await fetch(`/api/shifts?url=${encodeURIComponent(icalUrl)}`);
+            if (res.ok) {
+                const data = await res.json();
+                setShiftsData(data);
+            }
+        } catch (err) {
+            console.error('Failed to load shifts', err);
+        }
+        setShiftsLoading(false);
+    }, []);
+
     const timelineRef = useRef(null);
 
     const loadMonthData = useCallback(async () => {
@@ -940,6 +961,224 @@ export default function SchedulePage() {
                         })
                     )}
                 </div>
+            </div>
+
+            {/* ===== WHENIWORK SHIFTS ===== */}
+            <div className="card" style={{ marginTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Icon name="clock" size={16} /> Work Shifts
+                    </h3>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => {
+                            const current = typeof window !== 'undefined' ? localStorage.getItem('holdco-ical-url') || '' : '';
+                            const url = prompt('WhenIWork iCal URL:', current);
+                            if (url !== null) {
+                                localStorage.setItem('holdco-ical-url', url);
+                                loadShifts();
+                            }
+                        }}>
+                            <Icon name="settings" size={12} /> {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url') ? 'Change Feed' : 'Connect iCal'}
+                        </button>
+                        {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url') && (
+                            <button className="btn btn-secondary btn-sm" onClick={loadShifts}>
+                                <Icon name="zap" size={12} /> Refresh
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {!shiftsData ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url')
+                            ? <><button className="btn btn-primary btn-sm" onClick={loadShifts}><Icon name="zap" size={12} /> Load Shifts</button></>
+                            : <>Connect your WhenIWork iCal feed to see scheduled shifts.</>
+                        }
+                    </div>
+                ) : shiftsLoading ? (
+                    <div style={{ textAlign: 'center', padding: '20px' }}><div className="loading-spinner" /></div>
+                ) : (
+                    <>
+                        {/* Yesterday's shift prompt */}
+                        {(() => {
+                            const yesterday = new Date();
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            const yesterdayStr = yesterday.toISOString().split('T')[0];
+                            const yesterdayShifts = shiftsData?.shifts?.filter(s => s.date === yesterdayStr) || [];
+                            if (yesterdayShifts.length === 0) return null;
+
+                            return (
+                                <div style={{
+                                    padding: '14px', borderRadius: 'var(--radius-md)',
+                                    background: 'rgba(99, 102, 241, 0.08)',
+                                    border: '1px solid rgba(99, 102, 241, 0.2)',
+                                    marginBottom: '12px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <Icon name="sparkle" size={14} style={{ color: 'var(--color-accent)' }} />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Did you work yesterday?</span>
+                                    </div>
+                                    {yesterdayShifts.map((shift, i) => (
+                                        <div key={i} style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                                            <strong>{shift.employer}</strong>: {shift.startTime} → {shift.endTime} ({shift.durationHours}h scheduled)
+                                        </div>
+                                    ))}
+                                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        <button className="btn btn-primary btn-sm" onClick={() => setShiftLogTarget(yesterdayShifts[0])}>
+                                            <Icon name="check" size={12} /> Yes, Log Hours
+                                        </button>
+                                        <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                                            <Icon name="upload" size={12} /> Upload Screenshot
+                                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                alert(`Screenshot "${file.name}" noted for ${yesterdayShifts[0]?.employer || 'shift'}. (Upload to Filing for permanent storage)`);
+                                            }} />
+                                        </label>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Shift Log Form */}
+                        {shiftLogTarget && (
+                            <div style={{
+                                padding: '14px', borderRadius: 'var(--radius-md)',
+                                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                                marginBottom: '12px',
+                            }}>
+                                <h4 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '10px' }}>
+                                    Log Hours — {shiftLogTarget.employer}
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                                    <div className="input-group">
+                                        <label>Employer</label>
+                                        <select className="input" id="shift-log-employer" defaultValue={shiftLogTarget.employer} style={{ fontSize: '0.82rem' }}>
+                                            <option>Golden Bike Shop</option>
+                                            <option>Bentgate Mountaineering</option>
+                                        </select>
+                                    </div>
+                                    <div className="input-group">
+                                        <label>Start Time</label>
+                                        <input className="input" type="time" id="shift-log-start" defaultValue={shiftLogTarget.start ? new Date(shiftLogTarget.start).toTimeString().slice(0,5) : '09:00'} style={{ fontSize: '0.82rem' }} />
+                                    </div>
+                                    <div className="input-group">
+                                        <label>End Time</label>
+                                        <input className="input" type="time" id="shift-log-end" defaultValue={shiftLogTarget.end ? new Date(shiftLogTarget.end).toTimeString().slice(0,5) : '17:00'} style={{ fontSize: '0.82rem' }} />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-primary btn-sm" onClick={async () => {
+                                        const employer = document.getElementById('shift-log-employer')?.value;
+                                        const startTime = document.getElementById('shift-log-start')?.value;
+                                        const endTime = document.getElementById('shift-log-end')?.value;
+                                        const date = shiftLogTarget.date || new Date().toISOString().split('T')[0];
+                                        if (!startTime || !endTime) return;
+                                        try {
+                                            await addScheduleBlock({
+                                                date,
+                                                start_time: startTime,
+                                                end_time: endTime,
+                                                label: employer || shiftLogTarget.employer,
+                                                color: employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
+                                                block_type: 'physical_job',
+                                                is_recurring: false,
+                                                recurring_days: [],
+                                            });
+                                            setShiftLogTarget(null);
+                                            loadMonthData();
+                                        } catch (err) {
+                                            console.error('Failed to log shift', err);
+                                        }
+                                    }}>
+                                        <Icon name="save" size={12} /> Save Shift
+                                    </button>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setShiftLogTarget(null)}>Cancel</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Upcoming Shifts */}
+                        {(() => {
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            const upcoming = shiftsData?.shifts?.filter(s => s.date >= todayStr).reverse() || [];
+                            const past = shiftsData?.shifts?.filter(s => s.date < todayStr).slice(0, 5) || [];
+
+                            return (
+                                <>
+                                    {upcoming.length > 0 && (
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Upcoming</div>
+                                            {upcoming.map((shift, i) => (
+                                                <div key={i} style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                                                    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                                                    marginBottom: '4px',
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <div style={{
+                                                            width: '8px', height: '8px', borderRadius: '50%',
+                                                            background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
+                                                        }} />
+                                                        <div>
+                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.employer}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{shift.date}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.startTime} → {shift.endTime}</div>
+                                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{shift.durationHours}h</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {past.length > 0 && (
+                                        <div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Recent</div>
+                                            {past.map((shift, i) => (
+                                                <div key={i} style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                                                    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                                                    marginBottom: '4px', opacity: 0.7,
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <div style={{
+                                                            width: '8px', height: '8px', borderRadius: '50%',
+                                                            background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
+                                                        }} />
+                                                        <div>
+                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.employer}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{shift.date}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{shift.startTime} → {shift.endTime}</div>
+                                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{shift.durationHours}h</div>
+                                                        </div>
+                                                        <button className="btn-icon" title="Log these hours" onClick={() => setShiftLogTarget(shift)}>
+                                                            <Icon name="plus" size={12} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {upcoming.length === 0 && past.length === 0 && (
+                                        <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                            No shifts found in the feed.
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </>
+                )}
             </div>
 
             {/* ===== AI SCHEDULER CHAT ===== */}

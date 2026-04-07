@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, getCompanies, toggleDocumentFlag, getTransactions, updateDocument, getVendors, addVendor, deleteVendor, getVendorSpend, getVendorDocCounts, reorderVendors } from '@/lib/store';
+import { getDocuments, uploadDocument, deleteDocument, getDocumentDownloadUrl, getCompanies, toggleDocumentFlag, getTransactions, updateDocument, getVendors, addVendor, deleteVendor, getVendorSpend, getVendorDocCounts, reorderVendors, addTransaction } from '@/lib/store';
 import { generateDocumentName, hasApiKey } from '@/lib/gemini';
 
 const DOC_CATEGORIES = [
@@ -901,9 +901,80 @@ export default function FilingPage() {
                                 {vendorDocs.length === 0 && vendorTxns.length === 0 && (
                                     <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                                         No documents or transactions linked yet.
-                                        <br /><span style={{ fontSize: '0.72rem' }}>Upload receipts or scan expenses to auto-file under this vendor.</span>
+                                        <br /><span style={{ fontSize: '0.72rem' }}>Upload receipts or add expenses below.</span>
                                     </div>
                                 )}
+
+                                {/* Add Expense Inline */}
+                                <div style={{ marginBottom: '16px' }}>
+                                    <h4 style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Icon name="plus" size={12} /> Add Expense
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                        <input
+                                            className="input"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            placeholder="Amount ($)"
+                                            id="vendor-expense-amount"
+                                            style={{ fontSize: '0.82rem' }}
+                                        />
+                                        <input
+                                            className="input"
+                                            type="date"
+                                            id="vendor-expense-date"
+                                            defaultValue={new Date().toISOString().split('T')[0]}
+                                            style={{ fontSize: '0.82rem' }}
+                                        />
+                                        <input
+                                            className="input"
+                                            placeholder="Description (e.g. Monthly subscription)"
+                                            id="vendor-expense-desc"
+                                            style={{ fontSize: '0.82rem' }}
+                                        />
+                                        <select className="input" id="vendor-expense-category" defaultValue="Software" style={{ fontSize: '0.82rem' }}>
+                                            <option>Software</option>
+                                            <option>Operations</option>
+                                            <option>Marketing</option>
+                                            <option>Legal</option>
+                                            <option>Other</option>
+                                        </select>
+                                    </div>
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={async () => {
+                                            const amountEl = document.getElementById('vendor-expense-amount');
+                                            const dateEl = document.getElementById('vendor-expense-date');
+                                            const descEl = document.getElementById('vendor-expense-desc');
+                                            const catEl = document.getElementById('vendor-expense-category');
+                                            const amount = parseFloat(amountEl?.value);
+                                            if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
+                                            try {
+                                                await addTransaction({
+                                                    type: 'expense',
+                                                    amount,
+                                                    description: `${selectedVendor.name} — ${descEl?.value || 'Expense'}`,
+                                                    category: catEl?.value || 'Software',
+                                                    company_id: selectedVendor.company_id || activeCompanyId,
+                                                    date: dateEl?.value || new Date().toISOString().split('T')[0],
+                                                    vendor_id: selectedVendor.id,
+                                                });
+                                                // Reset form
+                                                if (amountEl) amountEl.value = '';
+                                                if (descEl) descEl.value = '';
+                                                // Refresh vendor data
+                                                openVendorDetail(selectedVendor);
+                                                loadVendorData();
+                                            } catch (err) {
+                                                console.error('Failed to add vendor expense', err);
+                                                alert('Failed to add expense: ' + err.message);
+                                            }
+                                        }}
+                                    >
+                                        <Icon name="dollar" size={12} /> Save Expense
+                                    </button>
+                                </div>
 
                                 {/* Actions */}
                                 <div className="modal-actions">
