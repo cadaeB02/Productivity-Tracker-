@@ -631,135 +631,195 @@ export default function FilingPage() {
                         </div>
                     )}
 
-                    {/* Vendor Grid with Drag & Drop */}
+                    {/* Vertical Pipeline Stack */}
                     {vendors.filter(v => vendorFilter === 'all' || v.category === vendorFilter).length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon"><Icon name="grid" size={48} /></div>
                             <h3>No vendors yet</h3>
                             <p>Add your tech stack — tools, platforms, and services you use.</p>
                         </div>
-                    ) : (
-                        <div
-                            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}
-                        >
-                            {vendors
-                                .filter(v => vendorFilter === 'all' || v.category === vendorFilter)
-                                .map((vendor, index) => {
-                                    const spend = vendorSpend[vendor.id] || { total: 0, monthly: 0, count: 0 };
-                                    const docCount = vendorDocCounts[vendor.id] || 0;
-                                    const logo = getVendorLogo(vendor.website);
-                                    const catInfo = VENDOR_CATEGORIES.find(c => c.key === vendor.category);
+                    ) : (() => {
+                        // Pipeline flow order
+                        const PIPELINE_ORDER = ['ai', 'software', 'hosting', 'analytics', 'communication', 'marketing', 'automation', 'payments', 'legal', 'other'];
+                        const filtered = vendors.filter(v => vendorFilter === 'all' || v.category === vendorFilter);
+                        
+                        // Group by category
+                        const grouped = {};
+                        filtered.forEach(v => {
+                            if (!grouped[v.category]) grouped[v.category] = [];
+                            grouped[v.category].push(v);
+                        });
+                        
+                        // Get max activity for proportional sizing
+                        const getActivity = (v) => (vendorDocCounts[v.id] || 0) + (vendorSpend[v.id]?.count || 0) + 1;
+                        const maxActivity = Math.max(...filtered.map(getActivity), 1);
+                        
+                        // Order layers by pipeline
+                        const layers = (vendorFilter === 'all' ? PIPELINE_ORDER : [vendorFilter])
+                            .filter(cat => grouped[cat]?.length > 0)
+                            .map(cat => ({ cat, vendors: grouped[cat] }));
 
+                        return (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0', padding: '8px 0' }}>
+                                {/* Pipeline start */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                                    <Icon name="sparkle" size={12} /> Input / Development
+                                </div>
+
+                                {layers.map((layer, layerIdx) => {
+                                    const catInfo = VENDOR_CATEGORIES.find(c => c.key === layer.cat);
                                     return (
-                                        <div
-                                            key={vendor.id}
-                                            className="card"
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('vendorId', vendor.id);
-                                                e.dataTransfer.setData('vendorIndex', index.toString());
-                                                e.currentTarget.style.opacity = '0.5';
-                                            }}
-                                            onDragEnd={(e) => {
-                                                e.currentTarget.style.opacity = '1';
-                                            }}
-                                            onDragOver={(e) => {
-                                                e.preventDefault();
-                                                e.currentTarget.style.borderColor = vendor.color || 'var(--color-accent)';
-                                            }}
-                                            onDragLeave={(e) => {
-                                                e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                                            }}
-                                            onDrop={(e) => {
-                                                e.preventDefault();
-                                                e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                                                const draggedId = e.dataTransfer.getData('vendorId');
-                                                if (draggedId === vendor.id) return;
-                                                const filtered = vendors.filter(v => vendorFilter === 'all' || v.category === vendorFilter);
-                                                const currentIds = filtered.map(v => v.id);
-                                                const fromIndex = currentIds.indexOf(draggedId);
-                                                const toIndex = currentIds.indexOf(vendor.id);
-                                                if (fromIndex === -1 || toIndex === -1) return;
-                                                const reordered = [...currentIds];
-                                                reordered.splice(fromIndex, 1);
-                                                reordered.splice(toIndex, 0, draggedId);
-                                                // Optimistic update
-                                                const reorderedVendors = reordered.map((id, i) => {
-                                                    const v = vendors.find(x => x.id === id);
-                                                    return { ...v, display_order: i };
-                                                });
-                                                setVendors(prev => {
-                                                    const unchanged = prev.filter(v => !reordered.includes(v.id));
-                                                    return [...reorderedVendors, ...unchanged].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-                                                });
-                                                reorderVendors(reordered);
-                                            }}
-                                            onClick={() => openVendorDetail(vendor)}
-                                            style={{
-                                                cursor: 'grab', padding: '16px', position: 'relative', overflow: 'hidden',
-                                                borderTop: `3px solid ${vendor.color || 'var(--color-accent)'}`,
-                                                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                                            }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
-                                        >
-                                            {/* Logo + Name */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                                                {logo ? (
-                                                    <img
-                                                        src={logo}
-                                                        alt={vendor.name}
-                                                        style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'white', padding: '2px' }}
-                                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                                    />
-                                                ) : (
-                                                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: vendor.color || 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', color: '#fff' }}>
-                                                        {vendor.name.charAt(0)}
-                                                    </div>
-                                                )}
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontSize: '0.88rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {vendor.name}
-                                                    </div>
-                                                    {catInfo && (
-                                                        <div style={{ fontSize: '0.62rem', fontWeight: 600, color: catInfo.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                            {catInfo.label}
-                                                        </div>
-                                                    )}
+                                        <div key={layer.cat} style={{ width: '100%' }}>
+                                            {/* Arrow connector */}
+                                            {layerIdx > 0 && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
+                                                    <div style={{ width: '2px', height: '16px', background: 'linear-gradient(to bottom, var(--border-color), var(--color-accent))' }} />
+                                                    <div style={{ color: 'var(--color-accent)', fontSize: '0.7rem', lineHeight: 1 }}>▼</div>
+                                                    <div style={{ width: '2px', height: '8px', background: 'linear-gradient(to bottom, var(--color-accent), var(--border-color))' }} />
                                                 </div>
-                                            </div>
+                                            )}
 
-                                            {/* Spend + Docs */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                                                <div>
-                                                    {spend.total > 0 ? (
-                                                        <>
-                                                            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(spend.total)}</div>
-                                                            {spend.monthly > 0 && (
-                                                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{formatCurrency(spend.monthly)}/mo</div>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No spend yet</div>
-                                                    )}
-                                                </div>
-                                                {(docCount > 0 || spend.count > 0) && (
-                                                    <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'right' }}>
-                                                        {docCount > 0 && <div>{docCount} doc{docCount !== 1 ? 's' : ''}</div>}
-                                                        {spend.count > 0 && <div>{spend.count} txn{spend.count !== 1 ? 's' : ''}</div>}
+                                            {/* Category Layer */}
+                                            <div style={{
+                                                background: 'var(--bg-card)',
+                                                border: '1px solid var(--border-subtle)',
+                                                borderRadius: 'var(--radius-lg, 12px)',
+                                                padding: '14px 16px',
+                                                borderLeft: `3px solid ${catInfo?.color || 'var(--color-accent)'}`,
+                                            }}>
+                                                {/* Layer Header */}
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <div style={{
+                                                            width: '8px', height: '8px', borderRadius: '50%',
+                                                            background: catInfo?.color || 'var(--color-accent)',
+                                                            boxShadow: `0 0 6px ${catInfo?.color || 'var(--color-accent)'}40`,
+                                                        }} />
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: catInfo?.color || 'var(--text-secondary)' }}>
+                                                            {catInfo?.label || layer.cat}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                                                            ({layer.vendors.length})
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </div>
+                                                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                        {formatCurrency(layer.vendors.reduce((s, v) => s + (vendorSpend[v.id]?.total || 0), 0))}
+                                                    </span>
+                                                </div>
 
-                                            {/* Drag handle hint */}
-                                            <div style={{ position: 'absolute', top: '6px', right: '6px', color: 'var(--text-muted)', opacity: 0.3 }}>
-                                                <Icon name="grid" size={10} />
+                                                {/* Vendor boxes — width proportional to activity */}
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                                                    {layer.vendors.map((vendor) => {
+                                                        const activity = getActivity(vendor);
+                                                        const proportion = Math.max(activity / maxActivity, 0.2);
+                                                        const minWidth = Math.max(proportion * 300, 130);
+                                                        const spend = vendorSpend[vendor.id] || { total: 0, monthly: 0, count: 0 };
+                                                        const docCount = vendorDocCounts[vendor.id] || 0;
+                                                        const logo = getVendorLogo(vendor.website);
+
+                                                        return (
+                                                            <div
+                                                                key={vendor.id}
+                                                                draggable
+                                                                onDragStart={(e) => {
+                                                                    e.dataTransfer.setData('vendorId', vendor.id);
+                                                                    e.currentTarget.style.opacity = '0.4';
+                                                                }}
+                                                                onDragEnd={(e) => { e.currentTarget.style.opacity = '1'; }}
+                                                                onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.boxShadow = `0 0 0 2px ${vendor.color || 'var(--color-accent)'}`; }}
+                                                                onDragLeave={(e) => { e.currentTarget.style.boxShadow = ''; }}
+                                                                onDrop={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.currentTarget.style.boxShadow = '';
+                                                                    const draggedId = e.dataTransfer.getData('vendorId');
+                                                                    if (draggedId === vendor.id) return;
+                                                                    const currentIds = vendors.map(v => v.id);
+                                                                    const fromIndex = currentIds.indexOf(draggedId);
+                                                                    const toIndex = currentIds.indexOf(vendor.id);
+                                                                    if (fromIndex === -1 || toIndex === -1) return;
+                                                                    const reordered = [...currentIds];
+                                                                    reordered.splice(fromIndex, 1);
+                                                                    reordered.splice(toIndex, 0, draggedId);
+                                                                    const reorderedVendors = reordered.map((id, i) => {
+                                                                        const v = vendors.find(x => x.id === id);
+                                                                        return { ...v, display_order: i };
+                                                                    });
+                                                                    setVendors(prev => {
+                                                                        const unchanged = prev.filter(v => !reordered.includes(v.id));
+                                                                        return [...reorderedVendors, ...unchanged].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                                                                    });
+                                                                    reorderVendors(reordered);
+                                                                }}
+                                                                onClick={() => openVendorDetail(vendor)}
+                                                                style={{
+                                                                    flex: `${proportion} 1 ${minWidth}px`,
+                                                                    minWidth: `${minWidth}px`,
+                                                                    maxWidth: '100%',
+                                                                    padding: '10px 12px',
+                                                                    borderRadius: 'var(--radius-md, 8px)',
+                                                                    background: `linear-gradient(135deg, ${vendor.color || 'var(--color-accent)'}08, ${vendor.color || 'var(--color-accent)'}15)`,
+                                                                    border: `1px solid ${vendor.color || 'var(--color-accent)'}30`,
+                                                                    cursor: 'pointer',
+                                                                    transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+                                                                    position: 'relative',
+                                                                }}
+                                                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${vendor.color || 'var(--color-accent)'}20`; }}
+                                                                onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {logo ? (
+                                                                        <img src={logo} alt={vendor.name} style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'white', padding: '1px', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                                                                    ) : (
+                                                                        <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: vendor.color || 'var(--color-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.7rem', color: '#fff', flexShrink: 0 }}>
+                                                                            {vendor.name.charAt(0)}
+                                                                        </div>
+                                                                    )}
+                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                            {vendor.name}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                                        {spend.total > 0 ? (
+                                                                            <div style={{ fontSize: '0.82rem', fontWeight: 800 }}>{formatCurrency(spend.total)}</div>
+                                                                        ) : null}
+                                                                        <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}>
+                                                                            {(docCount + spend.count) > 0 ? `${docCount + spend.count} items` : ''}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                {/* Activity bar */}
+                                                                <div style={{ marginTop: '6px', height: '3px', borderRadius: '2px', background: `${vendor.color || 'var(--color-accent)'}20`, overflow: 'hidden' }}>
+                                                                    <div style={{ height: '100%', borderRadius: '2px', background: vendor.color || 'var(--color-accent)', width: `${Math.min(proportion * 100, 100)}%`, transition: 'width 0.3s ease' }} />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     );
                                 })}
-                        </div>
-                    )}
+
+                                {/* Pipeline end */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0' }}>
+                                    <div style={{ width: '2px', height: '16px', background: 'linear-gradient(to bottom, var(--border-color), var(--color-success))' }} />
+                                    <div style={{ color: 'var(--color-success)', fontSize: '0.7rem', lineHeight: 1 }}>▼</div>
+                                    <div style={{ width: '2px', height: '8px', background: 'linear-gradient(to bottom, var(--color-success), transparent)' }} />
+                                </div>
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-success)',
+                                    textTransform: 'uppercase', letterSpacing: '0.08em',
+                                    padding: '8px 16px', borderRadius: '20px',
+                                    background: 'rgba(16, 185, 129, 0.08)',
+                                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                                }}>
+                                    <Icon name="zap" size={12} /> Production
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* Vendor Detail Modal */}
                     {selectedVendor && (
