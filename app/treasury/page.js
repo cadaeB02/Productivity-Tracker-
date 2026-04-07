@@ -89,6 +89,11 @@ export default function TreasuryPage() {
     const editorScrollRef = useRef(null);
     const editorInputRef = useRef(null);
 
+    // Plaid bank accounts
+    const [bankAccounts, setBankAccounts] = useState([]);
+    const [syncing, setSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState(null);
+
     const loadData = useCallback(async () => {
         try {
             const [comps, txns, allSessions, allProjects] = await Promise.all([
@@ -116,7 +121,43 @@ export default function TreasuryPage() {
     useEffect(() => {
         setLoading(true);
         loadData();
+        loadBankAccounts();
     }, [loadData]);
+
+    const loadBankAccounts = async () => {
+        try {
+            const res = await fetch('/api/plaid/get-accounts');
+            if (res.ok) {
+                const data = await res.json();
+                setBankAccounts(data.accounts || []);
+            }
+        } catch (err) {
+            console.error('Failed to load bank accounts', err);
+        }
+    };
+
+    const handleSync = async () => {
+        setSyncing(true);
+        setSyncResult(null);
+        try {
+            const body = activeCompanyId ? { company_id: activeCompanyId } : {};
+            const res = await fetch('/api/plaid/sync-transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            setSyncResult(data);
+            if (data.success) {
+                loadData();
+                loadBankAccounts();
+            }
+        } catch (err) {
+            setSyncResult({ error: err.message });
+        }
+        setSyncing(false);
+        setTimeout(() => setSyncResult(null), 5000);
+    };
 
     const resetForm = () => {
         setForm({
@@ -430,7 +471,54 @@ export default function TreasuryPage() {
                     <button className="btn btn-secondary" onClick={() => { setShowScanner(!showScanner); setShowForm(false); if (showScanner) resetScanner(); }}>
                         <Icon name="search" size={14} /> {showScanner ? 'Close Scanner' : 'Scan Receipt'}
                     </button>
+                    {bankAccounts.length > 0 && (
+                        <button className="btn btn-secondary" onClick={handleSync} disabled={syncing}>
+                            <Icon name="download" size={14} /> {syncing ? 'Syncing...' : 'Sync Bank'}
+                        </button>
+                    )}
                 </div>
+
+                {/* Sync Result Toast */}
+                {syncResult && (
+                    <div style={{
+                        padding: '10px 14px', borderRadius: 'var(--radius-md)', marginBottom: '12px',
+                        fontSize: '0.82rem', fontWeight: 600,
+                        background: syncResult.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                        color: syncResult.success ? 'var(--color-success)' : 'var(--color-danger)',
+                        border: `1px solid ${syncResult.success ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                    }}>
+                        {syncResult.success
+                            ? `✓ Synced: ${syncResult.added} added, ${syncResult.modified} updated, ${syncResult.removed} removed`
+                            : `✗ ${syncResult.error || 'Sync failed'}`
+                        }
+                    </div>
+                )}
+
+                {/* Bank Account Cards */}
+                {bankAccounts.filter(a => !activeCompanyId || a.company_id === activeCompanyId).length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                        {bankAccounts
+                            .filter(a => !activeCompanyId || a.company_id === activeCompanyId)
+                            .map(acct => (
+                                <div key={acct.id} className="card" style={{ padding: '14px', background: 'var(--bg-elevated)' }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'capitalize', marginBottom: '4px' }}>
+                                        {acct.plaid_items?.institution_name || 'Bank'} • {acct.subtype || acct.type}
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '2px' }}>
+                                        {acct.name} {acct.mask && <span style={{ color: 'var(--text-muted)' }}>••••{acct.mask}</span>}
+                                    </div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-accent)' }}>
+                                        {acct.current_balance != null ? formatCurrency(acct.current_balance) : '—'}
+                                    </div>
+                                    {acct.available_balance != null && acct.available_balance !== acct.current_balance && (
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                            Available: {formatCurrency(acct.available_balance)}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                    </div>
+                )}
 
                 {/* ═══════════ RECEIPT SCANNER ═══════════ */}
                 {showScanner && (
@@ -890,6 +978,50 @@ export default function TreasuryPage() {
                     <div className="stat-value">{companyBreakdowns.length}</div>
                 </div>
             </div>
+
+            {/* Bank Account Cards (All) */}
+            {bankAccounts.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', margin: 0 }}>
+                            <Icon name="building" size={14} className="icon-inline" /> Linked Accounts
+                        </h3>
+                        <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing}>
+                            <Icon name="download" size={12} /> {syncing ? 'Syncing...' : 'Sync All'}
+                        </button>
+                    </div>
+
+                    {syncResult && (
+                        <div style={{
+                            padding: '8px 12px', borderRadius: 'var(--radius-sm)', marginBottom: '10px',
+                            fontSize: '0.78rem', fontWeight: 600,
+                            background: syncResult.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                            color: syncResult.success ? 'var(--color-success)' : 'var(--color-danger)',
+                        }}>
+                            {syncResult.success
+                                ? `✓ ${syncResult.added} added, ${syncResult.modified} updated`
+                                : `✗ ${syncResult.error || 'Sync failed'}`
+                            }
+                        </div>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
+                        {bankAccounts.map(acct => (
+                            <div key={acct.id} className="card" style={{ padding: '12px', background: 'var(--bg-elevated)' }}>
+                                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                                    {acct.plaid_items?.institution_name || 'Bank'} • {acct.subtype || acct.type}
+                                </div>
+                                <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                                    {acct.name} {acct.mask && <span style={{ color: 'var(--text-muted)' }}>••••{acct.mask}</span>}
+                                </div>
+                                <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-accent)' }}>
+                                    {acct.current_balance != null ? formatCurrency(acct.current_balance) : '—'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Add Transaction Button */}
             <div style={{ marginBottom: '16px' }}>

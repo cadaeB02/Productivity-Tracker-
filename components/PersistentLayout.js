@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import Sidebar from '@/components/Sidebar';
+import BottomTabBar from '@/components/BottomTabBar';
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
 
@@ -12,7 +13,7 @@ export default function PersistentLayout({ children }) {
 
     const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
-    // Public pages — no sidebar
+    // Public pages — no sidebar, no tab bar
     if (isPublicRoute) {
         return <>{children}</>;
     }
@@ -27,6 +28,7 @@ export default function PersistentLayout({ children }) {
                         <div className="loading-spinner" />
                     </div>
                 </main>
+                <BottomTabBar />
             </div>
         );
     }
@@ -39,13 +41,14 @@ export default function PersistentLayout({ children }) {
         return null;
     }
 
-    // Authenticated — sidebar persists, only children swap
+    // Authenticated — sidebar (desktop) + tab bar (mobile)
     return (
         <div className="app-layout">
             <Sidebar />
             <main className="main-content">
                 {children}
             </main>
+            <BottomTabBar />
         </div>
     );
 }

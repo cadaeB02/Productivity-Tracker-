@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { createClient } from '@/lib/supabase/client';
 import { getUserSettings, saveUserSettings, getSessions, exportSessionsToCSV, downloadCSV, getCompanies } from '@/lib/store';
 import { useTheme } from '@/components/ThemeProvider';
 import { hasApiKey as hasLocalApiKey, setApiKey as setLocalApiKey, clearApiKey as clearLocalApiKey } from '@/lib/gemini';
+import { usePlaidLink } from 'react-plaid-link';
 
 function generateToken(length = 48) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -59,13 +60,115 @@ export default function SettingsPage() {
     const [orphanFixing, setOrphanFixing] = useState(false);
     const [orphanResult, setOrphanResult] = useState(null);
 
+    // Plaid / Connected Banks
+    const [plaidLinkToken, setPlaidLinkToken] = useState(null);
+    const [plaidAccounts, setPlaidAccounts] = useState([]);
+    const [plaidItems, setPlaidItems] = useState([]);
+    const [plaidLoading, setPlaidLoading] = useState(false);
+    const [plaidConnecting, setPlaidConnecting] = useState(false);
+    const [plaidError, setPlaidError] = useState('');
+
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadSettings();
         loadCompaniesForMerge();
         loadOrphanedSessions();
+        loadPlaidAccounts();
     }, []);
+
+    // ── Plaid Handlers ──
+    const loadPlaidAccounts = async () => {
+        try {
+            const res = await fetch('/api/plaid/get-accounts');
+            if (res.ok) {
+                const data = await res.json();
+                setPlaidAccounts(data.accounts || []);
+                setPlaidItems(data.items || []);
+            }
+        } catch (err) {
+            console.error('Failed to load Plaid accounts', err);
+        }
+    };
+
+    const handlePlaidConnect = async () => {
+        setPlaidConnecting(true);
+        setPlaidError('');
+        try {
+            const res = await fetch('/api/plaid/create-link-token', { method: 'POST' });
+            const data = await res.json();
+            if (data.link_token) {
+                setPlaidLinkToken(data.link_token);
+            } else {
+                setPlaidError(data.error || 'Failed to create link token');
+            }
+        } catch (err) {
+            setPlaidError(err.message || 'Connection error');
+        }
+        setPlaidConnecting(false);
+    };
+
+    const onPlaidSuccess = useCallback(async (publicToken, metadata) => {
+        try {
+            const res = await fetch('/api/plaid/exchange-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    public_token: publicToken,
+                    institution: metadata.institution,
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPlaidLinkToken(null);
+                loadPlaidAccounts();
+            } else {
+                setPlaidError(data.error || 'Failed to link account');
+            }
+        } catch (err) {
+            setPlaidError(err.message || 'Exchange failed');
+        }
+    }, []);
+
+    const { open: openPlaidLink, ready: plaidReady } = usePlaidLink({
+        token: plaidLinkToken,
+        onSuccess: onPlaidSuccess,
+        onExit: () => setPlaidLinkToken(null),
+    });
+
+    // Auto-open Plaid Link when token is ready
+    useEffect(() => {
+        if (plaidLinkToken && plaidReady) {
+            openPlaidLink();
+        }
+    }, [plaidLinkToken, plaidReady, openPlaidLink]);
+
+    const handlePlaidDisconnect = async (itemId) => {
+        if (!confirm('Disconnect this bank? Synced transactions will remain.')) return;
+        try {
+            await fetch('/api/plaid/get-accounts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plaid_item_id: itemId }),
+            });
+            loadPlaidAccounts();
+        } catch (err) {
+            console.error('Disconnect failed', err);
+        }
+    };
+
+    const handleAccountCompanyAssign = async (accountId, companyId) => {
+        try {
+            const supabase = createClient();
+            await supabase
+                .from('plaid_accounts')
+                .update({ company_id: companyId || null })
+                .eq('id', accountId);
+            loadPlaidAccounts();
+        } catch (err) {
+            console.error('Failed to assign company', err);
+        }
+    };
 
     const loadCompaniesForMerge = async () => {
         try {
@@ -768,17 +871,111 @@ export default function SettingsPage() {
                 </div>
             </div>
 
+            {/* Connected Banks (Plaid) */}
+            <div className="settings-section">
+                <h3><Icon name="dollar" size={18} className="icon-inline" /> Connected Banks</h3>
+                <div className="card">
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                        Connect your bank accounts to automatically sync transactions into Treasury.
+                        Powered by Plaid — your credentials are never stored on our servers.
+                    </p>
+
+                    {plaidError && (
+                        <div style={{ color: 'var(--color-danger)', fontSize: '0.82rem', marginBottom: '12px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)' }}>
+                            {plaidError}
+                        </div>
+                    )}
+
+                    {/* Connected Items */}
+                    {plaidItems.length > 0 && (
+                        <div style={{ marginBottom: '16px' }}>
+                            {plaidItems.map((item) => (
+                                <div key={item.id} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--border-subtle)', marginBottom: '8px',
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Icon name="building" size={16} />
+                                            {item.institution_name || 'Bank'}
+                                            <span className={`badge ${item.status === 'active' ? 'badge-active' : ''}`} style={{
+                                                fontSize: '0.65rem',
+                                                ...(item.status === 'error' ? { background: 'rgba(239,68,68,0.15)', color: 'var(--color-danger)' } : {}),
+                                            }}>
+                                                {item.status === 'active' ? 'Connected' : item.status === 'error' ? `Error: ${item.error_code}` : 'Disconnected'}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                            {plaidAccounts.filter(a => a.plaid_items?.institution_name === item.institution_name).length} account(s)
+                                            {item.updated_at && ` • Last synced ${new Date(item.updated_at).toLocaleDateString()}`}
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-danger btn-sm" onClick={() => handlePlaidDisconnect(item.id)}>
+                                        Disconnect
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Account → Company Mapping */}
+                    {plaidAccounts.length > 0 && (
+                        <div style={{ marginBottom: '16px' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-secondary)' }}>Account → Company Mapping</div>
+                            {plaidAccounts.map((acct) => (
+                                <div key={acct.id} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px',
+                                    padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                                    border: '1px solid var(--border-subtle)', marginBottom: '6px',
+                                }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                                            {acct.name} {acct.mask && <span style={{ color: 'var(--text-muted)' }}>••••{acct.mask}</span>}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                                            {acct.type} — {acct.subtype}
+                                            {acct.current_balance != null && ` • $${parseFloat(acct.current_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                                        </div>
+                                    </div>
+                                    <select
+                                        className="input"
+                                        style={{ width: 'auto', minWidth: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
+                                        value={acct.company_id || ''}
+                                        onChange={(e) => handleAccountCompanyAssign(acct.id, e.target.value)}
+                                    >
+                                        <option value="">No company</option>
+                                        {mergeCompanies.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handlePlaidConnect}
+                        disabled={plaidConnecting}
+                    >
+                        <Icon name="plus" size={14} />
+                        {plaidConnecting ? 'Connecting...' : plaidItems.length > 0 ? 'Connect Another Bank' : 'Connect Bank Account'}
+                    </button>
+                </div>
+            </div>
+
             {/* About */}
             <div className="settings-section">
                 <h3><Icon name="info" size={18} className="icon-inline" /> About</h3>
                 <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <div style={{ fontWeight: 700, fontSize: '1rem' }}>Parallax</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v7.2.0 — Productivity Tracker</div>
+                            <div style={{ fontWeight: 700, fontSize: '1rem' }}>HoldCo OS</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v8.0.0 — Productivity Tracker + Treasury</div>
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            Built with Next.js + Supabase + Gemini AI
+                            Built with Next.js + Supabase + Gemini AI + Plaid
                         </div>
                     </div>
                 </div>

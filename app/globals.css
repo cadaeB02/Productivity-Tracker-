@@ -236,7 +236,7 @@ select {
 @media (max-width: 768px) {
   .main-content {
     margin-left: 0;
-    padding: 80px 16px 32px;
+    padding: 20px 16px calc(88px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -412,10 +412,11 @@ select {
 
 @media (max-width: 768px) {
   .sidebar {
-    transform: translateX(-100%);
+    display: none;
   }
 
   .sidebar.open {
+    display: flex;
     transform: translateX(0);
   }
 
@@ -424,7 +425,7 @@ select {
   }
 
   .mobile-header {
-    display: flex;
+    display: none;
   }
 }
 
@@ -5232,4 +5233,297 @@ textarea.input {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 60px;
+}
+
+/* ==================== BOTTOM TAB BAR (iOS-first) ==================== */
+
+.bottom-tab-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: rgba(12, 16, 24, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid rgba(99, 102, 241, 0.1);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    justify-content: space-around;
+    align-items: stretch;
+    height: auto;
+}
+
+[data-theme="light"] .bottom-tab-bar {
+    background: rgba(248, 249, 252, 0.88);
+    border-top-color: rgba(99, 102, 241, 0.12);
+}
+
+@media (max-width: 768px) {
+    .bottom-tab-bar {
+        display: flex;
+    }
+}
+
+.tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 4px 6px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 52px;
+}
+
+.tab-item:hover {
+    color: var(--text-secondary);
+}
+
+.tab-item.active {
+    color: var(--text-accent);
+}
+
+.tab-icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 28px;
+}
+
+.tab-active-pill {
+    position: absolute;
+    inset: 0;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 14px;
+    animation: tab-pill-in 0.2s ease;
+}
+
+@keyframes tab-pill-in {
+    from { transform: scaleX(0.4); opacity: 0; }
+    to { transform: scaleX(1); opacity: 1; }
+}
+
+.tab-item.active .tab-icon-wrap svg {
+    position: relative;
+    z-index: 1;
+}
+
+.tab-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+}
+
+/* Sheet open state rotates the hamburger icon */
+.tab-item.sheet-open {
+    color: var(--text-accent);
+}
+
+/* ==================== MORE SHEET (slide-up) ==================== */
+
+.tab-sheet-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+
+.tab-sheet-backdrop.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+@media (max-width: 768px) {
+    .tab-sheet-backdrop {
+        display: block;
+    }
+}
+
+.tab-more-sheet {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1001;
+    background: var(--bg-card);
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.3);
+    padding: 8px 20px calc(88px + env(safe-area-inset-bottom, 0px)) 20px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-more-sheet.open {
+    transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+    .tab-more-sheet {
+        display: block;
+    }
+}
+
+.tab-sheet-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--text-muted);
+    opacity: 0.3;
+    margin: 0 auto 12px;
+}
+
+.tab-sheet-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    padding-left: 4px;
+}
+
+.tab-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.tab-sheet-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 8px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tab-sheet-item:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-default);
+}
+
+.tab-sheet-item.active {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.25);
+    color: var(--text-accent);
+}
+
+.tab-sheet-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--bg-card);
+    transition: all 0.15s ease;
+}
+
+.tab-sheet-item.active .tab-sheet-item-icon {
+    background: var(--gradient-accent);
+    color: white;
+}
+
+/* ==================== iOS TOUCH OPTIMIZATIONS ==================== */
+
+@media (max-width: 768px) {
+    /* Larger touch targets for all interactive elements */
+    .btn, .btn-sm {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Cards get larger padding on mobile */
+    .card {
+        padding: 18px;
+        border-radius: 14px;
+    }
+
+    /* Page headers adjust for mobile without stacked header bar */
+    .page-header {
+        padding-top: env(safe-area-inset-top, 8px);
+    }
+
+    .page-header h2 {
+        font-size: 1.5rem;
+    }
+
+    /* Stats grid: 2 cols on mobile */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Timer display larger on mobile */
+    .timer-display {
+        font-size: 3.5rem;
+    }
+
+    /* Session cards larger */
+    .session-card {
+        border-radius: 16px;
+    }
+
+    /* Active sessions section */
+    .active-sessions-grid {
+        gap: 12px;
+    }
+
+    /* Company tiles full width on mobile */
+    .company-tile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Nav links in sidebar larger touch */
+    .nav-link {
+        padding: 14px 16px;
+        min-height: 48px;
+    }
+
+    /* Input fields larger */
+    .input, select.input {
+        min-height: 44px;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    /* Prevent iOS text zoom on any form inputs */
+    input, select, textarea {
+        font-size: 16px;
+    }
+}
+
+/* Safe area helpers */
+.safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }

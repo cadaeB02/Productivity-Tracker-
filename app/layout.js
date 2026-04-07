@@ -9,11 +9,20 @@ import { SidebarOverrideProvider } from '@/components/SidebarOverrideContext';
 export const metadata = {
     title: 'HoldCo OS - Productivity Tracker',
     description: 'See your time from every angle. Track work across companies, projects, and contexts.',
-    icons: { icon: '/icon.svg' },
+    manifest: '/manifest.json',
+    icons: {
+        icon: '/icon.svg',
+        apple: '/apple-icon.png',
+    },
     appleWebApp: {
         capable: true,
         statusBarStyle: 'black-translucent',
         title: 'HoldCo OS',
+    },
+    other: {
+        'mobile-web-app-capable': 'yes',
+        'apple-mobile-web-app-capable': 'yes',
+        'apple-mobile-web-app-status-bar-style': 'black-translucent',
     },
 };
 
