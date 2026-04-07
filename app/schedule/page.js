@@ -23,6 +23,7 @@ import {
     importSleepLogs,
     getCompanies,
     getAutoClockRules,
+    addManualSession,
 } from '@/lib/store';
 import { chatWithAgent, hasApiKey } from '@/lib/gemini';
 import { formatTime } from '@/lib/utils';
@@ -1182,20 +1183,33 @@ export default function SchedulePage() {
                                         const startVal = document.getElementById('shift-log-start')?.value;
                                         const endVal = document.getElementById('shift-log-end')?.value;
                                         try {
-                                            await addScheduleBlock({
-                                                title: `${employer} Shift`,
-                                                date: shiftLogTarget.date,
-                                                start_time: startVal,
-                                                end_time: endVal,
-                                                category: 'work',
-                                                company: employer,
-                                                is_recurring: false,
-                                                recurring_days: [],
-                                            });
+                                            // Find company ID for this employer
+                                            const companies = await getCompanies();
+                                            const company = companies.find(c => c.name?.toLowerCase().includes(employer?.toLowerCase().split(' ')[0]));
+                                            const companyId = company?.id || null;
+
+                                            // Calculate duration in seconds from start/end times
+                                            const [sh, sm] = (startVal || '09:00').split(':').map(Number);
+                                            const [eh, em] = (endVal || '17:00').split(':').map(Number);
+                                            const startMins = sh * 60 + sm;
+                                            const endMins = eh * 60 + em;
+                                            const durationSeconds = Math.max(0, (endMins - startMins) * 60);
+
+                                            // Create completed session with actual start/end times
+                                            const startDateTime = `${shiftLogTarget.date}T${startVal || '09:00'}:00`;
+                                            await addManualSession(
+                                                null, // no task
+                                                null, // no project
+                                                companyId,
+                                                startDateTime,
+                                                durationSeconds,
+                                                `${employer} Shift`
+                                            );
                                             setShiftLogTarget(null);
                                             loadMonthData();
                                         } catch (err) {
                                             console.error('Failed to log shift', err);
+                                            alert('Failed to save shift: ' + err.message);
                                         }
                                     }}>
                                         <Icon name="save" size={12} /> Save Shift
