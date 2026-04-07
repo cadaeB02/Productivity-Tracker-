@@ -640,7 +640,7 @@ export default function FilingPage() {
                         </div>
                     ) : (() => {
                         // Pipeline flow order
-                        const PIPELINE_ORDER = ['ai', 'software', 'hosting', 'analytics', 'communication', 'marketing', 'automation', 'payments', 'legal', 'other'];
+                        const PIPELINE_ORDER = ['ai', 'software', 'automation', 'hosting', 'analytics', 'communication', 'marketing', 'payments', 'legal', 'other'];
                         const filtered = vendors.filter(v => vendorFilter === 'all' || v.category === vendorFilter);
                         
                         // Group by category
