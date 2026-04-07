@@ -112,31 +112,35 @@ export async function GET(request) {
             .select('*')
             .eq('user_id', userId)
             .not('scheduled_date', 'is', null)
-            .not('scheduled_start_time', 'is', null)
             .limit(200);
 
         for (const task of (tasks || [])) {
-            const dtStart = toICalDate(task.scheduled_date, task.scheduled_start_time);
-            const dtEnd = toICalDate(task.scheduled_date, task.scheduled_end_time || task.scheduled_start_time);
-            if (!dtStart) continue;
-
-            // If no end time, default to 1 hour after start
-            let finalEnd = dtEnd;
-            if (!task.scheduled_end_time && dtStart) {
-                const startH = parseInt(task.scheduled_start_time.split(':')[0]);
-                const startM = task.scheduled_start_time.split(':')[1];
-                finalEnd = toICalDate(task.scheduled_date, `${String(startH + 1).padStart(2, '0')}:${startM}`);
-            }
-
             const statusEmoji = task.status === 'done' ? '✅' : '📋';
             lines.push('BEGIN:VEVENT');
             lines.push(`UID:holdco-task-${task.id}@holdco-os`);
             lines.push(`DTSTAMP:${now.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`);
-            lines.push(`DTSTART;TZID=America/Denver:${dtStart}`);
-            lines.push(`DTEND;TZID=America/Denver:${finalEnd || dtStart}`);
+
+            if (task.scheduled_start_time) {
+                const dtStart = toICalDate(task.scheduled_date, task.scheduled_start_time);
+                let dtEnd;
+                if (task.scheduled_end_time) {
+                    dtEnd = toICalDate(task.scheduled_date, task.scheduled_end_time);
+                } else {
+                    const startH = parseInt(task.scheduled_start_time.split(':')[0]);
+                    const startM = task.scheduled_start_time.split(':')[1];
+                    dtEnd = toICalDate(task.scheduled_date, `${String(startH + 1).padStart(2, '0')}:${startM}`);
+                }
+                lines.push(`DTSTART;TZID=America/Denver:${dtStart}`);
+                lines.push(`DTEND;TZID=America/Denver:${dtEnd}`);
+            } else {
+                const [y, m, d] = task.scheduled_date.split('-');
+                lines.push(`DTSTART;VALUE=DATE:${y}${m}${d}`);
+                const nextDay = new Date(parseInt(y), parseInt(m) - 1, parseInt(d) + 1);
+                lines.push(`DTEND;VALUE=DATE:${nextDay.getFullYear()}${String(nextDay.getMonth() + 1).padStart(2, '0')}${String(nextDay.getDate()).padStart(2, '0')}`);
+            }
+
             lines.push(`SUMMARY:${statusEmoji} ${escapeIcal(task.title)}`);
-            lines.push(`DESCRIPTION:Duration: ${task.duration_estimate || 'unknown'}\\nStatus: ${task.status || 'pending'}`);
-            lines.push('CATEGORIES:task');
+            lines.push(`CATEGORIES:task`);
             lines.push('END:VEVENT');
         }
 
