@@ -1041,7 +1041,7 @@ export default function SchedulePage() {
                     <div style={{ textAlign: 'center', padding: '20px' }}><div className="loading-spinner" /></div>
                 ) : (
                     <>
-                        {/* Yesterday's shift prompt */}
+                        {/* Yesterday's shift prompt — itemized */}
                         {(() => {
                             const yesterday = new Date();
                             yesterday.setDate(yesterday.getDate() - 1);
@@ -1050,34 +1050,48 @@ export default function SchedulePage() {
                             if (yesterdayShifts.length === 0) return null;
 
                             return (
-                                <div style={{
-                                    padding: '14px', borderRadius: 'var(--radius-md)',
-                                    background: 'rgba(99, 102, 241, 0.08)',
-                                    border: '1px solid rgba(99, 102, 241, 0.2)',
-                                    marginBottom: '12px',
-                                }}>
+                                <div style={{ marginBottom: '12px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                                         <Icon name="sparkle" size={14} style={{ color: 'var(--color-accent)' }} />
                                         <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Did you work yesterday?</span>
+                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({yesterdayShifts.length} shift{yesterdayShifts.length > 1 ? 's' : ''})</span>
                                     </div>
                                     {yesterdayShifts.map((shift, i) => (
-                                        <div key={i} style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                                            <strong>{shift.employer}</strong>: {shift.startTime} → {shift.endTime} ({shift.durationHours}h scheduled)
+                                        <div key={i} style={{
+                                            padding: '12px', borderRadius: 'var(--radius-md)',
+                                            background: 'rgba(99, 102, 241, 0.06)',
+                                            border: '1px solid rgba(99, 102, 241, 0.15)',
+                                            marginBottom: '6px',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            flexWrap: 'wrap', gap: '8px',
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{
+                                                    width: '10px', height: '10px', borderRadius: '50%',
+                                                    background: shift.employer === 'Golden Bike Shop' ? '#f59e0b' : '#3b82f6',
+                                                }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{shift.employer}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                        {shift.startTime} → {shift.endTime} ({shift.durationHours}h scheduled)
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button className="btn btn-primary btn-sm" onClick={() => setShiftLogTarget(shift)}>
+                                                    <Icon name="check" size={12} /> Log This Shift
+                                                </button>
+                                                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                                                    <Icon name="upload" size={12} /> Screenshot
+                                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        alert(`Screenshot "${file.name}" saved for ${shift.employer}. Upload to Filing for permanent storage.`);
+                                                    }} />
+                                                </label>
+                                            </div>
                                         </div>
                                     ))}
-                                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        <button className="btn btn-primary btn-sm" onClick={() => setShiftLogTarget(yesterdayShifts[0])}>
-                                            <Icon name="check" size={12} /> Yes, Log Hours
-                                        </button>
-                                        <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                                            <Icon name="upload" size={12} /> Upload Screenshot
-                                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
-                                                alert(`Screenshot "${file.name}" noted for ${yesterdayShifts[0]?.employer || 'shift'}. (Upload to Filing for permanent storage)`);
-                                            }} />
-                                        </label>
-                                    </div>
                                 </div>
                             );
                         })()}

@@ -166,12 +166,15 @@ export async function GET(request) {
         const icsText = await response.text();
         const events = parseICS(icsText);
 
-        // Deduplicate by UID
+        // Deduplicate by date + start time + summary (catches recurring events with unique UIDs)
         const seen = new Set();
         const uniqueEvents = events.filter(e => {
-            if (!e.uid) return true;
-            if (seen.has(e.uid)) return false;
-            seen.add(e.uid);
+            const date = getLocalDate(e.start);
+            const time = e.start?.localTime || '';
+            const sum = (e.summary || '').toLowerCase().trim();
+            const key = `${date}|${time}|${sum}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
             return true;
         });
 
