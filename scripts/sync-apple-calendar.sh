@@ -9,27 +9,18 @@
 HOLDCO_URL="https://productivitytrackermvp.vercel.app"
 API_ENDPOINT="${HOLDCO_URL}/api/apple-calendar"
 
-# Your Supabase user ID (run this once to find it):
-#   In browser console on HoldCo OS: copy(JSON.parse(localStorage.getItem('sb-...-auth-token')).user.id)
-# Or check Settings page
-USER_ID="${HOLDCO_USER_ID:-}"
+# Auth: just use your HoldCo OS email — no UUID needed!
+HOLDCO_EMAIL="${HOLDCO_EMAIL:-cade.bergthold@gmail.com}"
 
-# Optional sync key for auth
+# Optional sync key for extra security
 SYNC_KEY="${HOLDCO_SYNC_KEY:-}"
 
 # How many days ahead/behind to sync
 DAYS_BACK=7
 DAYS_AHEAD=90
 
-if [ -z "$USER_ID" ]; then
-    echo "❌ Set HOLDCO_USER_ID environment variable first."
-    echo "   Find it: open browser console on HoldCo OS → run:"
-    echo "   JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.includes('auth-token')))).user.id"
-    exit 1
-fi
-
 echo "📅 Syncing Apple Calendar → HoldCo OS..."
-echo "   User: $USER_ID"
+echo "   Email: $HOLDCO_EMAIL"
 echo "   Range: ${DAYS_BACK} days back, ${DAYS_AHEAD} days ahead"
 
 # ── Read Calendar events using JXA (JavaScript for Automation) ──
@@ -97,17 +88,17 @@ fi
 EVENT_COUNT=$(echo "$EVENTS_JSON" | python3 -c "import sys,json; print(len(json.loads(sys.stdin.read())))" 2>/dev/null || echo "?")
 echo "   Found: $EVENT_COUNT events"
 
-# ── POST to HoldCo OS ──
+# ── POST to HoldCo OS (using email for auth) ──
 PAYLOAD=$(python3 -c "
 import json, sys
-events = json.loads('''$EVENTS_JSON''')
+events = json.loads(sys.stdin.read())
 payload = {
     'events': events,
-    'userId': '$USER_ID',
+    'email': '$HOLDCO_EMAIL',
     'syncKey': '$SYNC_KEY'
 }
 print(json.dumps(payload))
-")
+" <<< "$EVENTS_JSON")
 
 RESPONSE=$(curl -s -X POST "$API_ENDPOINT" \
     -H "Content-Type: application/json" \

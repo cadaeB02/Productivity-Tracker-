@@ -9,10 +9,18 @@ const supabase = createClient(
 // Receive Apple Calendar events from the local sync script
 export async function POST(request) {
     try {
-        const { events, userId, syncKey } = await request.json();
+        const { events, userId, email, syncKey } = await request.json();
         
-        if (!events || !userId) {
-            return NextResponse.json({ error: 'Missing events or userId' }, { status: 400 });
+        // Resolve user ID from email if not provided directly
+        let resolvedUserId = userId;
+        if (!resolvedUserId && email) {
+            const { data: users } = await supabase.auth.admin.listUsers();
+            const user = users?.users?.find(u => u.email === email);
+            if (user) resolvedUserId = user.id;
+        }
+
+        if (!events || !resolvedUserId) {
+            return NextResponse.json({ error: 'Missing events or userId/email' }, { status: 400 });
         }
 
         // Verify sync key matches (simple auth)
@@ -26,7 +34,7 @@ export async function POST(request) {
         const { error } = await supabase
             .from('calendar_cache')
             .upsert({
-                user_id: userId,
+                user_id: resolvedUserId,
                 events_json: JSON.stringify(events),
                 event_count: events.length,
                 synced_at: new Date().toISOString(),
