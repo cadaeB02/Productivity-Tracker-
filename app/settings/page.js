@@ -6,7 +6,7 @@ import Icon from '@/components/Icon';
 import { createClient } from '@/lib/supabase/client';
 import { getUserSettings, saveUserSettings, getSessions, exportSessionsToCSV, downloadCSV, getCompanies } from '@/lib/store';
 import { useTheme } from '@/components/ThemeProvider';
-import { hasApiKey as hasLocalApiKey, setApiKey as setLocalApiKey, clearApiKey as clearLocalApiKey } from '@/lib/gemini';
+import { hasApiKey as hasLocalApiKey, setApiKey as setLocalApiKey, clearApiKey as clearLocalApiKey, getAiMode, setAiMode as setAiModeConfig, getOllamaConfig, setOllamaConfig as setOllamaConfigFn } from '@/lib/gemini';
 import { usePlaidLink } from 'react-plaid-link';
 
 function generateToken(length = 48) {
@@ -68,6 +68,14 @@ export default function SettingsPage() {
     const [plaidConnecting, setPlaidConnecting] = useState(false);
     const [plaidError, setPlaidError] = useState('');
 
+    // Local AI (Ollama)
+    const [localAiMode, setLocalAiMode] = useState('auto');
+    const [ollamaUrl, setOllamaUrlInput] = useState('http://localhost:11434');
+    const [ollamaModel, setOllamaModelInput] = useState('cade-assistant');
+    const [ollamaSaved, setOllamaSaved] = useState(false);
+    const [ollamaTesting, setOllamaTesting] = useState(false);
+    const [ollamaTestResult, setOllamaTestResult] = useState(null);
+
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -75,6 +83,12 @@ export default function SettingsPage() {
         loadCompaniesForMerge();
         loadOrphanedSessions();
         loadPlaidAccounts();
+        // Load Ollama config
+        const aiMode = getAiMode();
+        const ollamaConfig = getOllamaConfig();
+        setLocalAiMode(aiMode);
+        setOllamaUrlInput(ollamaConfig.url);
+        setOllamaModelInput(ollamaConfig.model);
     }, []);
 
     // ── Plaid Handlers ──
@@ -572,7 +586,7 @@ export default function SettingsPage() {
 
             {/* Gemini API Key */}
             <div className="settings-section">
-                <h3><Icon name="robot" size={18} className="icon-inline" /> Gemini AI Integration</h3>
+                <h3><Icon name="robot" size={18} className="icon-inline" /> Cloud AI (Gemini)</h3>
                 <div className="card">
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                         Enter your Google AI API key to enable AI-powered session summaries and productivity coaching.
@@ -611,6 +625,116 @@ export default function SettingsPage() {
                         {hasGemini && (
                             <span className="badge badge-active">Connected</span>
                         )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Local AI (Ollama) */}
+            <div className="settings-section">
+                <h3><Icon name="zap" size={18} className="icon-inline" /> Local AI (Ollama)</h3>
+                <div className="card">
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                        Connect to your local Ollama instance to run AI features for free using models like Gemma 4.
+                        All suggestive AI (summaries, suggestions, doc naming) will run locally to keep costs at $0.
+                    </p>
+
+                    {/* AI Mode Toggle */}
+                    <div className="input-group" style={{ marginBottom: '14px' }}>
+                        <label>AI Mode</label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            {[
+                                { key: 'auto', label: 'Auto', desc: 'Background → Local, Chat → Cloud' },
+                                { key: 'local', label: 'Local Only', desc: 'Everything uses Ollama' },
+                                { key: 'cloud', label: 'Cloud Only', desc: 'Everything uses Gemini' },
+                            ].map(mode => (
+                                <button
+                                    key={mode.key}
+                                    className={`btn btn-sm ${localAiMode === mode.key ? 'btn-primary' : 'btn-ghost'}`}
+                                    onClick={() => {
+                                        setLocalAiMode(mode.key);
+                                        setAiModeConfig(mode.key);
+                                    }}
+                                    title={mode.desc}
+                                    style={{ flex: 1 }}
+                                >
+                                    {mode.label}
+                                </button>
+                            ))}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {localAiMode === 'auto' && '⚡ Auto: Background tasks (summaries, suggestions, doc naming) use Local AI. Direct chat uses Cloud AI.'}
+                            {localAiMode === 'local' && '🖥️ Local: All AI requests go through Ollama. Zero cloud costs.'}
+                            {localAiMode === 'cloud' && '☁️ Cloud: All AI requests go through Gemini API.'}
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div className="input-group">
+                            <label>Ollama URL</label>
+                            <input
+                                className="input"
+                                placeholder="http://localhost:11434"
+                                value={ollamaUrl}
+                                onChange={(e) => setOllamaUrlInput(e.target.value)}
+                                style={{ fontSize: '0.85rem' }}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>Model</label>
+                            <input
+                                className="input"
+                                placeholder="cade-assistant"
+                                value={ollamaModel}
+                                onChange={(e) => setOllamaModelInput(e.target.value)}
+                                style={{ fontSize: '0.85rem' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 items-center">
+                        <button className="btn btn-primary btn-sm" onClick={() => {
+                            setOllamaConfigFn(ollamaUrl, ollamaModel);
+                            setOllamaSaved(true);
+                            setTimeout(() => setOllamaSaved(false), 2000);
+                        }}>
+                            {ollamaSaved ? <><Icon name="check-circle" size={14} style={{ color: 'var(--color-success)' }} /> Saved!</> : 'Save Config'}
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={async () => {
+                            setOllamaTesting(true);
+                            setOllamaTestResult(null);
+                            try {
+                                const res = await fetch(`${ollamaUrl}/api/tags`);
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    const models = data.models?.map(m => m.name).join(', ') || 'none found';
+                                    setOllamaTestResult({ ok: true, msg: `Connected! Models: ${models}` });
+                                } else {
+                                    setOllamaTestResult({ ok: false, msg: `Error ${res.status}: Ollama not responding` });
+                                }
+                            } catch (err) {
+                                setOllamaTestResult({ ok: false, msg: `Cannot reach Ollama at ${ollamaUrl}. Is it running?` });
+                            }
+                            setOllamaTesting(false);
+                        }}>
+                            {ollamaTesting ? 'Testing...' : <><Icon name="zap" size={12} /> Test Connection</>}
+                        </button>
+                    </div>
+
+                    {ollamaTestResult && (
+                        <div style={{
+                            marginTop: '10px', padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                            fontSize: '0.82rem',
+                            background: ollamaTestResult.ok ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                            color: ollamaTestResult.ok ? 'var(--color-success)' : 'var(--color-danger)',
+                            border: `1px solid ${ollamaTestResult.ok ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                        }}>
+                            {ollamaTestResult.ok ? <Icon name="check-circle" size={14} className="icon-inline" /> : <Icon name="alert" size={14} className="icon-inline" />}
+                            {' '}{ollamaTestResult.msg}
+                        </div>
+                    )}
+
+                    <div style={{ marginTop: '12px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <strong>System prompt baked in:</strong> Local AI always knows about HoldCo OS, your companies (Digital Mechanic, PocketGC, Golden Bike Shop, Bentgate), and all platform features.
                     </div>
                 </div>
             </div>
