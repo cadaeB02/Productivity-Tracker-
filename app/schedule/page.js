@@ -918,55 +918,111 @@ export default function SchedulePage() {
                     ) : (
                         tasks.filter(t => t.status !== 'done').map(task => {
                             const dOpt = DURATION_OPTIONS.find(d => d.value === task.duration_estimate);
+                            const isScheduling = expandedBlock === `task-${task.id}`;
                             return (
-                                <div key={task.id} className="task-notepad-item">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                                        <button
-                                            className="btn-icon"
-                                            style={{ color: 'var(--color-success)' }}
-                                            onClick={async () => {
-                                                await updateScheduleTask(task.id, { status: 'done', completed_at: new Date().toISOString() });
-                                                loadMonthData();
-                                            }}
-                                            title="Mark done"
-                                        >
-                                            <Icon name="check" size={14} />
-                                        </button>
-                                        <span style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {task.title}
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                                        <span
-                                            className="duration-chip active"
-                                            style={{ background: dOpt?.color || '#6366f1', color: '#fff', borderColor: dOpt?.color || '#6366f1', cursor: 'default', fontSize: '0.7rem', padding: '2px 8px' }}
-                                        >
-                                            {dOpt?.label || '?'}
-                                        </span>
-                                        {task.scheduled_date && (
-                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
-                                                {new Date(task.scheduled_date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                <div key={task.id} className="task-notepad-item" style={{ flexDirection: 'column', gap: '6px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                                            <button
+                                                className="btn-icon"
+                                                style={{ color: 'var(--color-success)' }}
+                                                onClick={async () => {
+                                                    await updateScheduleTask(task.id, { status: 'done', completed_at: new Date().toISOString() });
+                                                    loadMonthData();
+                                                }}
+                                                title="Mark done"
+                                            >
+                                                <Icon name="check" size={14} />
+                                            </button>
+                                            <span style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {task.title}
                                             </span>
-                                        )}
-                                        <button
-                                            className="btn btn-ghost btn-sm"
-                                            style={{ padding: '3px 8px', fontSize: '0.7rem' }}
-                                            onClick={() => handleAISchedule(task)}
-                                            disabled={aiLoading}
-                                        >
-                                            <Icon name="sparkle" size={10} /> Schedule
-                                        </button>
-                                        <button
-                                            className="btn-icon"
-                                            style={{ color: 'var(--color-danger)' }}
-                                            onClick={async () => {
-                                                await deleteScheduleTask(task.id);
-                                                loadMonthData();
-                                            }}
-                                        >
-                                            <Icon name="close" size={12} />
-                                        </button>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                            <span
+                                                className="duration-chip active"
+                                                style={{ background: dOpt?.color || '#6366f1', color: '#fff', borderColor: dOpt?.color || '#6366f1', cursor: 'default', fontSize: '0.7rem', padding: '2px 8px' }}
+                                            >
+                                                {dOpt?.label || '?'}
+                                            </span>
+                                            {task.scheduled_date && (
+                                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                    {new Date(task.scheduled_date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                                    {task.scheduled_start_time && <> · {task.scheduled_start_time.slice(0,5)}</>}
+                                                    {task.scheduled_end_time && <>–{task.scheduled_end_time.slice(0,5)}</>}
+                                                </span>
+                                            )}
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                                                onClick={() => setExpandedBlock(isScheduling ? null : `task-${task.id}`)}
+                                            >
+                                                <Icon name="sparkle" size={10} /> {isScheduling ? 'Close' : '+ Schedule'}
+                                            </button>
+                                            <button
+                                                className="btn-icon"
+                                                style={{ color: 'var(--color-danger)' }}
+                                                onClick={async () => {
+                                                    await deleteScheduleTask(task.id);
+                                                    loadMonthData();
+                                                }}
+                                            >
+                                                <Icon name="close" size={12} />
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    {/* Inline schedule form */}
+                                    {isScheduling && (
+                                        <div style={{
+                                            display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap',
+                                            padding: '8px 0 4px 34px', width: '100%',
+                                        }}>
+                                            <div className="input-group" style={{ flex: '0 0 auto' }}>
+                                                <label style={{ fontSize: '0.68rem' }}>Date</label>
+                                                <input
+                                                    className="input"
+                                                    type="date"
+                                                    id={`task-date-${task.id}`}
+                                                    defaultValue={task.scheduled_date || new Date().toISOString().split('T')[0]}
+                                                    style={{ fontSize: '0.78rem', width: '140px' }}
+                                                />
+                                            </div>
+                                            <div className="input-group" style={{ flex: '0 0 auto' }}>
+                                                <label style={{ fontSize: '0.68rem' }}>Start</label>
+                                                <input
+                                                    className="input"
+                                                    type="time"
+                                                    id={`task-start-${task.id}`}
+                                                    defaultValue={task.scheduled_start_time || '09:00'}
+                                                    style={{ fontSize: '0.78rem', width: '110px' }}
+                                                />
+                                            </div>
+                                            <div className="input-group" style={{ flex: '0 0 auto' }}>
+                                                <label style={{ fontSize: '0.68rem' }}>End</label>
+                                                <input
+                                                    className="input"
+                                                    type="time"
+                                                    id={`task-end-${task.id}`}
+                                                    defaultValue={task.scheduled_end_time || '10:00'}
+                                                    style={{ fontSize: '0.78rem', width: '110px' }}
+                                                />
+                                            </div>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.72rem' }} onClick={async () => {
+                                                const date = document.getElementById(`task-date-${task.id}`)?.value;
+                                                const start = document.getElementById(`task-start-${task.id}`)?.value;
+                                                const end = document.getElementById(`task-end-${task.id}`)?.value;
+                                                await scheduleTask(task.id, date, start, end);
+                                                setExpandedBlock(null);
+                                                loadMonthData();
+                                            }}>
+                                                <Icon name="calendar" size={10} /> Set Time
+                                            </button>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => handleAISchedule(task)}>
+                                                <Icon name="sparkle" size={10} /> AI Suggest
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })
