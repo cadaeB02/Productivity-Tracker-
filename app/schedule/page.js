@@ -112,6 +112,8 @@ export default function SchedulePage() {
     const [shiftsData, setShiftsData] = useState(null);
     const [shiftsLoading, setShiftsLoading] = useState(false);
     const [shiftLogTarget, setShiftLogTarget] = useState(null);
+    const [showIcalInput, setShowIcalInput] = useState(false);
+    const [icalUrlInput, setIcalUrlInput] = useState('');
 
     const loadShifts = useCallback(async () => {
         const icalUrl = typeof window !== 'undefined' ? localStorage.getItem('holdco-ical-url') : null;
@@ -972,11 +974,8 @@ export default function SchedulePage() {
                     <div style={{ display: 'flex', gap: '6px' }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => {
                             const current = typeof window !== 'undefined' ? localStorage.getItem('holdco-ical-url') || '' : '';
-                            const url = prompt('WhenIWork iCal URL:', current);
-                            if (url !== null) {
-                                localStorage.setItem('holdco-ical-url', url);
-                                loadShifts();
-                            }
+                            setIcalUrlInput(current);
+                            setShowIcalInput(true);
                         }}>
                             <Icon name="settings" size={12} /> {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url') ? 'Change Feed' : 'Connect iCal'}
                         </button>
@@ -988,11 +987,48 @@ export default function SchedulePage() {
                     </div>
                 </div>
 
-                {!shiftsData ? (
+                {/* iCal URL Input Form */}
+                {showIcalInput && (
+                    <div style={{
+                        padding: '14px', borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                        marginBottom: '12px',
+                    }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                            Paste your iCal feed URL (.ics)
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                            Works with WhenIWork, Apple Calendar, Google Calendar, Outlook — any .ics feed
+                        </div>
+                        <input
+                            className="input"
+                            type="url"
+                            placeholder="https://app.wheniwork.com/calendar/...global.ics"
+                            value={icalUrlInput}
+                            onChange={e => setIcalUrlInput(e.target.value)}
+                            autoFocus
+                            style={{ marginBottom: '8px', fontSize: '0.82rem' }}
+                        />
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => {
+                                if (icalUrlInput.trim()) {
+                                    localStorage.setItem('holdco-ical-url', icalUrlInput.trim());
+                                    setShowIcalInput(false);
+                                    loadShifts();
+                                }
+                            }}>
+                                <Icon name="save" size={12} /> Save & Load
+                            </button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowIcalInput(false)}>Cancel</button>
+                        </div>
+                    </div>
+                )}
+
+                {!shiftsData && !showIcalInput ? (
                     <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                         {typeof window !== 'undefined' && localStorage.getItem('holdco-ical-url')
                             ? <><button className="btn btn-primary btn-sm" onClick={loadShifts}><Icon name="zap" size={12} /> Load Shifts</button></>
-                            : <>Connect your WhenIWork iCal feed to see scheduled shifts.</>
+                            : <>Connect your iCal feed to see scheduled shifts and work hours.</>
                         }
                     </div>
                 ) : shiftsLoading ? (
