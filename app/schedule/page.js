@@ -21,7 +21,10 @@ function parseTimeToMinutes(timeStr) {
 }
 
 function getSafeDate(dateObj) {
-    return dateObj.toISOString().split('T')[0];
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 }
 
 export default function SchedulePage() {
@@ -144,10 +147,6 @@ export default function SchedulePage() {
     const viewDates = [];
     if (viewMode === 'today' || viewMode === 'upcoming') {
         const start = new Date(currentDate);
-        if (viewMode === 'today') {
-            const t = new Date();
-            start.setFullYear(t.getFullYear(), t.getMonth(), t.getDate());
-        }
         for (let i = 0; i < horizonDays; i++) {
             const d = new Date(start);
             d.setDate(start.getDate() + i);
@@ -241,7 +240,10 @@ export default function SchedulePage() {
                                     <button 
                                         key={d} 
                                         className={`cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
-                                        onClick={() => { setCurrentDate(dateObj); setViewMode('today'); }}
+                                        onClick={() => {
+                                            setCurrentDate(dateObj);
+                                            setViewMode(isToday ? 'today' : 'upcoming');
+                                        }}
                                     >{d}</button>
                                 );
                             }
