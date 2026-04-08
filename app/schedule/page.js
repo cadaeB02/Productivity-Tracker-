@@ -245,9 +245,9 @@ export default function SchedulePage() {
                             return (
                                 <>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <button className="btn-icon" onClick={() => setCurrentDate(new Date(calYear, calMonth - 1, 1))}><Icon name="chevron-left" size={14} /></button>
+                                        <button className="btn-icon" onClick={() => setCurrentDate(new Date(calYear, calMonth - 1, 1))}><Icon name="arrow-left" size={14} /></button>
                                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{MONTH_NAMES[calMonth]} {calYear}</span>
-                                        <button className="btn-icon" onClick={() => setCurrentDate(new Date(calYear, calMonth + 1, 1))}><Icon name="chevron-right" size={14} /></button>
+                                        <button className="btn-icon" onClick={() => setCurrentDate(new Date(calYear, calMonth + 1, 1))}><Icon name="arrow-right" size={14} /></button>
                                     </div>
                                     <div className="mini-cal-grid">
                                         {['S','M','T','W','T','F','S'].map((d,i) => <div key={i} className="cal-cell header">{d}</div>)}
@@ -916,7 +916,7 @@ export default function SchedulePage() {
                     display: flex;
                 }
                 .time-label {
-                    width: 60px;
+                    width: 70px;
                     font-size: 0.75rem;
                     color: var(--text-muted);
                     text-align: right;
@@ -931,7 +931,7 @@ export default function SchedulePage() {
 
                 .mock-block {
                     position: absolute;
-                    left: 60px; 
+                    left: 70px; 
                     right: 16px;
                     border-radius: 6px;
                     padding: 4px 10px;
@@ -989,17 +989,20 @@ export default function SchedulePage() {
                 }
                 .modal-content {
                     background: var(--bg-primary);
-                    width: 440px;
+                    width: 520px;
+                    max-width: 95vw;
                     border-radius: 16px;
                     padding: 24px;
                     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
                     border: 1px solid var(--border-color);
+                    max-height: 90vh;
+                    overflow-y: auto;
                 }
 
                 /* Current time indicator */
                 .now-indicator {
                     position: absolute;
-                    left: 50px;
+                    left: 60px;
                     right: 0;
                     z-index: 5;
                     pointer-events: none;
@@ -1022,7 +1025,7 @@ export default function SchedulePage() {
                 /* Session overlay blocks */
                 .session-block {
                     position: absolute;
-                    left: 60px;
+                    left: 70px;
                     right: 16px;
                     border-radius: 4px;
                     padding: 2px 8px;
