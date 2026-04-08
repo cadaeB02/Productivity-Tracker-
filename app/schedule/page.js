@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/components/AuthProvider';
-import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate, updateScheduleTask } from '@/lib/store';
+import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate, updateScheduleTask, addScheduleTask } from '@/lib/store';
 
 // Helpers
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -90,6 +90,17 @@ export default function SchedulePage() {
         }
     };
 
+    const handleAddTask = async () => {
+        try {
+            const newTask = await addScheduleTask("New Task", "unknown", "");
+            setTasks([newTask, ...tasks]);
+            setSelectedTask(newTask); // Open modal immediately
+        } catch (err) {
+            console.error(err);
+            alert("Failed to create task");
+        }
+    };
+
     // Derived view arrays based on viewMode & currentDate & horizonDays
     const viewDates = [];
     if (viewMode === 'today' || viewMode === 'upcoming') {
@@ -138,7 +149,7 @@ export default function SchedulePage() {
                     </div>
 
                     <div className="sidebar-primary-action">
-                        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'flex-start', padding: '10px 16px', borderRadius: '10px', fontWeight: 600 }}>
+                        <button className="btn btn-primary" onClick={handleAddTask} style={{ width: '100%', justifyContent: 'flex-start', padding: '10px 16px', borderRadius: '10px', fontWeight: 600 }}>
                             <Icon name="plus" size={16} /> Add Task
                         </button>
                     </div>
