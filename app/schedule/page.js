@@ -4,6 +4,24 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/components/AuthProvider';
+import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate } from '@/lib/store';
+
+// Helpers
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const START_HOUR = 6; // Timeline starts at 6 AM
+const END_HOUR = 23;  // Timeline ends at 11 PM
+const HOUR_HEIGHT = 60; // 60px per hour
+
+function parseTimeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + (m || 0);
+}
+
+function getSafeDate(dateObj) {
+    return dateObj.toISOString().split('T')[0];
+}
 
 export default function SchedulePage() {
     const { user } = useAuth();
@@ -12,13 +30,84 @@ export default function SchedulePage() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [viewMode, setViewMode] = useState('today'); // 'inbox', 'today', 'upcoming'
     const [horizonDays, setHorizonDays] = useState(1); // 1, 3, 5, 7
+    const [showSessions, setShowSessions] = useState(false);
+    
+    // Filters Context
+    const [projectFilter, setProjectFilter] = useState('all');
 
     // Current Date Context
-    const today = new Date();
-    const [currentDate, setCurrentDate] = useState(today);
+    const [currentDate, setCurrentDate] = useState(new Date());
 
-    // Toggle logic for small screens
+    // Actual Data State
+    const [companies, setCompanies] = useState([]);
+    const [tasks, setTasks] = useState([]);
+    const [blocks, setBlocks] = useState([]);
+    const [sessions, setSessions] = useState([]);
+    const [loading, setLoading] = useState(true);
+
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+    // Initial Fetch
+    useEffect(() => {
+        async function load() {
+            if (!user) return;
+            try {
+                const [cmps, tsks, blks, evts] = await Promise.all([
+                    getCompanies(),
+                    getScheduleTasks({}),
+                    getScheduleBlocks(),
+                    // add calendar sync fetch here eventually
+                ]);
+                setCompanies(cmps);
+                setTasks(tsks);
+                setBlocks(blks);
+                // fetch sessions for current month or visible range?
+                // for now just empty, will hook up dynamically
+            } catch (err) {
+                console.error("Failed to load schedule data", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        load();
+    }, [user]);
+
+    // Derived view arrays based on viewMode & currentDate & horizonDays
+    const viewDates = [];
+    if (viewMode === 'today' || viewMode === 'upcoming') {
+        const start = new Date(currentDate);
+        if (viewMode === 'today') {
+            const t = new Date();
+            start.setFullYear(t.getFullYear(), t.getMonth(), t.getDate());
+        }
+        for (let i = 0; i < horizonDays; i++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            viewDates.push(d);
+        }
+    } else if (viewMode === 'inbox') {
+        // Inbox doesn't need a timeline, just tasks
+    }
+
+    // Helper: calculate top/height for timeline events
+    const getBlockStyle = (startStr, endStr) => {
+        const sm = parseTimeToMinutes(startStr);
+        const em = parseTimeToMinutes(endStr);
+        const startOffset = sm - (START_HOUR * 60);
+        
+        let top = (startOffset / 60) * HOUR_HEIGHT;
+        let diff = em - sm;
+        if (diff < 15) diff = 15; // Minimum 15 min height
+        let height = (diff / 60) * HOUR_HEIGHT;
+
+        // Clip to top if it starts before timeline
+        if (top < 0) {
+            height += top;
+            top = 0;
+        }
+
+        return { top: \`\${top}px\`, height: \`\${height}px\` };
+    };
 
     return (
         <AppLayout hideGlobalSidebar={false}>
@@ -27,7 +116,7 @@ export default function SchedulePage() {
                 {/* ==================================================== */}
                 {/* TODOIST-STYLE INNER SIDEBAR */}
                 {/* ==================================================== */}
-                <div className={`schedule-sidebar ${!sidebarOpen ? 'closed' : ''}`}>
+                <div className={\`schedule-sidebar \${!sidebarOpen ? 'closed' : ''}\`}>
                     <div className="sidebar-header">
                         <button className="btn-icon" onClick={toggleSidebar} title="Collapse Sidebar">
                             <Icon name="menu" size={16} />
@@ -42,15 +131,14 @@ export default function SchedulePage() {
                     </div>
 
                     <div className="sidebar-nav-section">
-                        <button className={`nav-item ${viewMode === 'inbox' ? 'active' : ''}`} onClick={() => setViewMode('inbox')}>
+                        <button className={\`nav-item \${viewMode === 'inbox' && projectFilter === 'all' ? 'active' : ''}\`} onClick={() => { setViewMode('inbox'); setProjectFilter('all'); }}>
                             <Icon name="inbox" size={16} /> Inbox
-                            <span className="badge">5</span>
+                            <span className="badge">{tasks.filter(t => !t.scheduled_date && t.status !== 'done').length}</span>
                         </button>
-                        <button className={`nav-item ${viewMode === 'today' ? 'active' : ''}`} onClick={() => setViewMode('today')}>
+                        <button className={\`nav-item \${viewMode === 'today' && projectFilter === 'all' ? 'active' : ''}\`} onClick={() => { setViewMode('today'); setProjectFilter('all'); setCurrentDate(new Date()); }}>
                             <Icon name="calendar" size={16} /> Today
-                            <span className="badge today-badge">12</span>
                         </button>
-                        <button className={`nav-item ${viewMode === 'upcoming' ? 'active' : ''}`} onClick={() => setViewMode('upcoming')}>
+                        <button className={\`nav-item \${viewMode === 'upcoming' && projectFilter === 'all' ? 'active' : ''}\`} onClick={() => { setViewMode('upcoming'); setProjectFilter('all'); }}>
                             <Icon name="calendar" size={16} /> Upcoming
                         </button>
                         <button className="nav-item">
@@ -60,27 +148,22 @@ export default function SchedulePage() {
 
                     <div className="sidebar-nav-section">
                         <div className="section-title">My Projects</div>
-                        <button className="nav-item project-item">
-                            <span className="color-dot" style={{ backgroundColor: '#22c55e' }}></span> PocketGC
-                        </button>
-                        <button className="nav-item project-item">
-                            <span className="color-dot" style={{ backgroundColor: '#3b82f6' }}></span> Digital Mechanic
-                        </button>
-                        <div className="section-title" style={{ marginTop: '16px' }}>Team Projects</div>
-                        <button className="nav-item project-item">
-                            <span className="color-dot" style={{ backgroundColor: '#f59e0b' }}></span> Antigravity Build
-                        </button>
+                        {companies.map(company => (
+                            <button 
+                                key={company.id} 
+                                className={\`nav-item project-item \${projectFilter === company.id ? 'active' : ''}\`}
+                                onClick={() => setProjectFilter(company.id)}
+                            >
+                                <span className="color-dot" style={{ backgroundColor: company.color || '#94a3b8' }}></span> {company.name}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Expandable Mini Calendar Placeholder */}
                     <div className="sidebar-mini-calendar">
-                        <div className="section-title">Calendar</div>
-                        <div className="mini-calendar-placeholder">
-                            [Mini Month Calendar]
-                        </div>
+                        <div className="section-title">Calendar jumps coming soon</div>
                     </div>
                 </div>
-
 
                 {/* ==================================================== */}
                 {/* AKIFLOW-STYLE MAIN TIMELINE */}
@@ -95,103 +178,155 @@ export default function SchedulePage() {
                             </button>
                         )}
                         <div className="date-display">
-                            <h2>Today</h2>
-                            <span>{currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric'})}</span>
+                            <h2>{viewMode === 'inbox' ? 'Inbox' : viewMode === 'today' ? 'Today' : 'Upcoming'}</h2>
+                            {viewMode !== 'inbox' && <span>{currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric'})}</span>}
                         </div>
                         
                         <div className="view-controls">
-                            <div className="horizon-toggle">
-                                {[1, 3, 5, 7].map(days => (
-                                    <button 
-                                        key={days}
-                                        className={`horizon-btn ${horizonDays === days ? 'active' : ''}`}
-                                        onClick={() => setHorizonDays(days)}
-                                    >
-                                        {days}D
-                                    </button>
-                                ))}
-                            </div>
-                            <button className="btn btn-ghost btn-sm">
+                            {viewMode !== 'inbox' && (
+                                <div className="horizon-toggle">
+                                    {[1, 3, 5, 7].map(days => (
+                                        <button 
+                                            key={days}
+                                            className={\`horizon-btn \${horizonDays === days ? 'active' : ''}\`}
+                                            onClick={() => setHorizonDays(days)}
+                                        >
+                                            {days}D
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <button 
+                                className={\`btn btn-ghost btn-sm \${showSessions ? 'active-toggle' : ''}\`}
+                                onClick={() => setShowSessions(!showSessions)}
+                            >
                                 <Icon name="eye" size={14} /> Show Sessions
                             </button>
-                            <button className="btn-icon">
-                                <Icon name="more-horizontal" size={16} />
-                            </button>
                         </div>
                     </div>
 
-                    {/* The Timelines Container */}
-                    <div className="timeline-grid-container">
-                        {/* 
-                            For each day in horizonDays, render a column.
-                            Here we mock a 1-day view exactly.
-                        */}
-                        <div className="timeline-day-column">
-                            {/* Day Header (Tasks Inbox for this day) */}
-                            <div className="day-header-inbox">
-                                <div className="day-stats">
-                                    <span className="stat-badge small">3 Small</span>
-                                    <span className="stat-badge medium">2 Med</span>
-                                    <span className="stat-badge large">1 Lg</span>
-                                </div>
-                                <div className="dateless-tasks-row">
-                                    <div className="dateless-task">
+                    {/* TIMELINE VIEW OR INBOX VIEW */}
+                    {viewMode === 'inbox' ? (
+                        <div style={{ padding: '24px', overflowY: 'auto' }}>
+                            <h3 style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Unscheduled Tasks</h3>
+                            <div className="dateless-tasks-row" style={{ maxWidth: '600px' }}>
+                                {tasks.filter(t => !t.scheduled_date && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter)).map(task => (
+                                    <div key={task.id} className="dateless-task">
                                         <div className="checkbox"></div>
-                                        <span>Call Jon</span>
+                                        <span>{task.title}</span>
+                                        {task.task_size && <span className={\`stat-badge \${task.task_size}\`} style={{marginLeft: 'auto'}}>{task.task_size}</span>}
                                     </div>
-                                    <div className="dateless-task">
-                                        <div className="checkbox"></div>
-                                        <span>Review Taxes</span>
-                                    </div>
-                                </div>
+                                ))}
+                                {tasks.filter(t => !t.scheduled_date && t.status !== 'done').length === 0 && (
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>Inbox zero! ✨</div>
+                                )}
                             </div>
+                        </div>
+                    ) : (
+                        <div className="timeline-grid-container">
+                            {viewDates.map((dateObj, dsi) => {
+                                const iso = getSafeDate(dateObj);
+                                const dayOfWeek = dateObj.getDay();
+                                
+                                // Filter Data for this specific column
+                                const dayTasks = tasks.filter(t => t.scheduled_date === iso && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter));
+                                const timedTasks = dayTasks.filter(t => t.scheduled_start_time);
+                                const datelessTasks = dayTasks.filter(t => !t.scheduled_start_time);
+                                
+                                const dayBlocks = blocks.filter(b => {
+                                    if (projectFilter !== 'all' && b.company_id !== projectFilter) return false;
+                                    if (b.date === iso) return true;
+                                    if (b.is_recurring && b.recurring_days && b.recurring_days.includes(dayOfWeek)) return true;
+                                    return false;
+                                });
 
-                            {/* Vertical Time Blocks */}
-                            <div className="time-blocks-grid">
-                                {Array.from({ length: 15 }).map((_, i) => {
-                                    const hour = i + 7; // 7am to 9pm
-                                    const formattedHour = hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`;
-                                    return (
-                                        <div key={i} className="time-row">
-                                            <div className="time-label">{formattedHour}</div>
-                                            <div className="time-slot">
-                                                {/* Grid lines & absolute positioned blocks go here */}
+                                return (
+                                    <div key={dsi} className="timeline-day-column">
+                                        
+                                        {/* Column Header */}
+                                        <div className="day-header-inbox">
+                                            <div style={{ padding: '0 12px 8px', fontWeight: 600, fontSize: '0.95rem', color: dateObj.toDateString() === today.toDateString() ? 'var(--accent)' : 'var(--text-primary)' }}>
+                                                {DAY_NAMES[dayOfWeek]}, {MONTH_NAMES[dateObj.getMonth()]} {dateObj.getDate()}
+                                            </div>
+                                            <div className="day-stats" style={{ padding: '0 12px' }}>
+                                                {['small', 'medium', 'large'].map(size => {
+                                                    const count = dayTasks.filter(t => t.task_size === size).length;
+                                                    if (count === 0) return null;
+                                                    return <span key={size} className={\`stat-badge \${size}\`}>{count} {size === 'large' ? 'Lg' : size === 'medium' ? 'Med' : 'Sm'}</span>;
+                                                })}
+                                            </div>
+                                            <div className="dateless-tasks-row" style={{ padding: '0 12px' }}>
+                                                {datelessTasks.map(task => (
+                                                    <div key={task.id} className="dateless-task">
+                                                        <div className="checkbox"></div>
+                                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{task.title}</span>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
-                                    );
-                                })}
-                                
-                                {/* Placeholder Blocks for visualization */}
-                                <div className="mock-block" style={{ top: '80px', height: '120px', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderLeft: '3px solid #3b82f6' }}>
-                                    <span className="time">8:00 AM - 10:00 AM</span>
-                                    <strong>Deep Work: App Layout</strong>
-                                </div>
-                                <div className="mock-block apple-cal" style={{ top: '240px', height: '60px' }}>
-                                    <span className="time">11:00 AM</span>
-                                    <strong>Team Sync (Apple Cal)</strong>
-                                </div>
-                                <div className="mock-block" style={{ top: '380px', height: '180px', backgroundColor: 'rgba(34, 197, 94, 0.2)', borderLeft: '3px solid #22c55e' }}>
-                                    <span className="time">1:20 PM - 4:20 PM</span>
-                                    <strong>Golden Bike Shop Shift</strong>
-                                </div>
-                            </div>
+
+                                        {/* Vertical Timeline */}
+                                        <div className="time-blocks-grid">
+                                            {/* Hourly lines */}
+                                            {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
+                                                const hour = i + START_HOUR;
+                                                const formattedHour = hour > 12 ? \`\${hour - 12} PM\` : hour === 12 ? '12 PM' : \`\${hour} AM\`;
+                                                return (
+                                                    <div key={i} className="time-row" style={{ height: \`\${HOUR_HEIGHT}px\` }}>
+                                                        <div className="time-label">{formattedHour}</div>
+                                                        <div className="time-slot"></div>
+                                                    </div>
+                                                );
+                                            })}
+                                            
+                                            {/* Render Recurring Blocks (background layer) */}
+                                            {dayBlocks.map(block => {
+                                                const style = getBlockStyle(block.start_time, block.end_time);
+                                                return (
+                                                    <div key={block.id} className="mock-block" style={{ 
+                                                        ...style, 
+                                                        backgroundColor: \`\${block.color || '#3b82f6'}1a\`, 
+                                                        borderLeft: \`3px solid \${block.color || '#3b82f6'}\`,
+                                                        zIndex: 1
+                                                    }}>
+                                                        <span className="time">{block.start_time.slice(0,5)} - {block.end_time.slice(0,5)}</span>
+                                                        <strong>{block.label}</strong>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Render Timed Tasks (foreground layer) */}
+                                            {timedTasks.map(task => {
+                                                const style = getBlockStyle(task.scheduled_start_time, task.scheduled_end_time || task.scheduled_start_time);
+                                                return (
+                                                    <div key={task.id} className="mock-block task-block" style={{ 
+                                                        ...style,
+                                                        zIndex: 2
+                                                    }}>
+                                                        <span className="time">{task.scheduled_start_time.slice(0,5)}</span>
+                                                        <strong>{task.title}</strong>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
 
-            {/* Scoped CSS for the new layout shell to keep it clean */}
-            <style jsx>{`
+            <style jsx>{\`
                 .schedule-workspace {
                     display: flex;
-                    height: calc(100vh - 64px); /* assuming top bar */
+                    height: calc(100vh - 64px); 
                     background-color: var(--bg-primary);
                     color: var(--text-primary);
                     overflow: hidden;
                     font-family: 'Inter', -apple-system, sans-serif;
                 }
 
-                /* SIDEBAR */
                 .schedule-sidebar {
                     width: 260px;
                     background-color: var(--bg-secondary);
@@ -241,6 +376,7 @@ export default function SchedulePage() {
                     cursor: pointer;
                     transition: all 0.15s;
                     text-align: left;
+                    width: 100%;
                 }
                 .nav-item:hover {
                     background: var(--bg-tertiary);
@@ -285,17 +421,7 @@ export default function SchedulePage() {
                     padding: 0 8px 16px;
                     margin-top: auto;
                 }
-                .mini-calendar-placeholder {
-                    background: var(--bg-tertiary);
-                    border-radius: 8px;
-                    padding: 24px;
-                    text-align: center;
-                    color: var(--text-muted);
-                    font-size: 0.85rem;
-                    margin: 0 8px;
-                }
 
-                /* MAIN AKIFLOW AREA */
                 .schedule-main {
                     flex: 1;
                     display: flex;
@@ -347,6 +473,10 @@ export default function SchedulePage() {
                     color: var(--text-primary);
                     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
                 }
+                .active-toggle {
+                    background: var(--accent) !important;
+                    color: #fff !important;
+                }
 
                 .timeline-grid-container {
                     flex: 1;
@@ -365,7 +495,6 @@ export default function SchedulePage() {
                     border-right: none;
                 }
 
-                /* DAY INBOX HEADER */
                 .day-header-inbox {
                     padding: 16px 0;
                     border-bottom: 1px solid var(--border-color);
@@ -384,10 +513,12 @@ export default function SchedulePage() {
                     font-weight: 600;
                     padding: 2px 8px;
                     border-radius: 12px;
+                    text-transform: capitalize;
                 }
                 .stat-badge.small { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
                 .stat-badge.medium { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
                 .stat-badge.large { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+                .stat-badge.unknown { background: rgba(148, 163, 184, 0.1); color: #94a3b8; }
                 
                 .dateless-tasks-row {
                     display: flex;
@@ -410,16 +541,15 @@ export default function SchedulePage() {
                     height: 16px;
                     border: 2px solid var(--text-muted);
                     border-radius: 4px;
+                    flex-shrink: 0;
                 }
 
-                /* VERTICAL TIMELINE */
                 .time-blocks-grid {
                     position: relative;
                     padding-bottom: 40px;
                 }
                 .time-row {
                     display: flex;
-                    height: 60px; /* 1 hour = 60px */
                 }
                 .time-label {
                     width: 60px;
@@ -428,17 +558,16 @@ export default function SchedulePage() {
                     text-align: right;
                     padding-right: 12px;
                     position: relative;
-                    top: -8px; /* Center align with border */
+                    top: -8px; 
                 }
                 .time-slot {
                     flex: 1;
                     border-top: 1px solid var(--border-color);
                 }
 
-                /* MOCK ABSOLUTE BLOCKS */
                 .mock-block {
                     position: absolute;
-                    left: 60px; /* align with slot */
+                    left: 60px; 
                     right: 16px;
                     border-radius: 6px;
                     padding: 6px 10px;
@@ -453,12 +582,12 @@ export default function SchedulePage() {
                     opacity: 0.8;
                     margin-bottom: 2px;
                 }
-                .mock-block.apple-cal {
-                    background-color: var(--bg-tertiary);
-                    border-left: 3px solid var(--text-muted);
-                    color: var(--text-secondary);
+                .mock-block.task-block {
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    border-left: 3px solid var(--text-primary);
                 }
-            `}</style>
+            \`}</style>
         </AppLayout>
     );
 }
