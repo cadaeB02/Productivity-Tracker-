@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/components/AuthProvider';
-import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate } from '@/lib/store';
+import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate, updateScheduleTask } from '@/lib/store';
 
 // Helpers
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -45,6 +45,9 @@ export default function SchedulePage() {
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    // Modal State
+    const [selectedTask, setSelectedTask] = useState(null);
+
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
     // Initial Fetch
@@ -61,8 +64,6 @@ export default function SchedulePage() {
                 setCompanies(cmps);
                 setTasks(tsks);
                 setBlocks(blks);
-                // fetch sessions for current month or visible range?
-                // for now just empty, will hook up dynamically
             } catch (err) {
                 console.error("Failed to load schedule data", err);
             } finally {
@@ -71,6 +72,23 @@ export default function SchedulePage() {
         }
         load();
     }, [user]);
+
+    // Handle Task Updates from Modal
+    const handleSaveTask = async (updates) => {
+        if (!selectedTask) return;
+        try {
+            const updated = await updateScheduleTask(selectedTask.id, updates);
+            setTasks(tasks.map(t => t.id === updated.id ? updated : t));
+            if (updates.status === 'done') {
+                setSelectedTask(null);
+            } else {
+                setSelectedTask({ ...selectedTask, ...updates });
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to update task");
+        }
+    };
 
     // Derived view arrays based on viewMode & currentDate & horizonDays
     const viewDates = [];
@@ -85,8 +103,6 @@ export default function SchedulePage() {
             d.setDate(start.getDate() + i);
             viewDates.push(d);
         }
-    } else if (viewMode === 'inbox') {
-        // Inbox doesn't need a timeline, just tasks
     }
 
     // Helper: calculate top/height for timeline events
@@ -100,23 +116,20 @@ export default function SchedulePage() {
         if (diff < 15) diff = 15; // Minimum 15 min height
         let height = (diff / 60) * HOUR_HEIGHT;
 
-        // Clip to top if it starts before timeline
         if (top < 0) {
             height += top;
             top = 0;
         }
 
-        return { top: \`\${top}px\`, height: \`\${height}px\` };
+        return { top: `${top}px`, height: `${height}px` };
     };
 
     return (
         <AppLayout hideGlobalSidebar={false}>
             <div className="schedule-workspace">
                 
-                {/* ==================================================== */}
                 {/* TODOIST-STYLE INNER SIDEBAR */}
-                {/* ==================================================== */}
-                <div className={\`schedule-sidebar \${!sidebarOpen ? 'closed' : ''}\`}>
+                <div className={`schedule-sidebar ${!sidebarOpen ? 'closed' : ''}`}>
                     <div className="sidebar-header">
                         <button className="btn-icon" onClick={toggleSidebar} title="Collapse Sidebar">
                             <Icon name="menu" size={16} />
@@ -131,14 +144,14 @@ export default function SchedulePage() {
                     </div>
 
                     <div className="sidebar-nav-section">
-                        <button className={\`nav-item \${viewMode === 'inbox' && projectFilter === 'all' ? 'active' : ''}\`} onClick={() => { setViewMode('inbox'); setProjectFilter('all'); }}>
+                        <button className={`nav-item ${viewMode === 'inbox' && projectFilter === 'all' ? 'active' : ''}`} onClick={() => { setViewMode('inbox'); setProjectFilter('all'); }}>
                             <Icon name="inbox" size={16} /> Inbox
                             <span className="badge">{tasks.filter(t => !t.scheduled_date && t.status !== 'done').length}</span>
                         </button>
-                        <button className={\`nav-item \${viewMode === 'today' && projectFilter === 'all' ? 'active' : ''}\`} onClick={() => { setViewMode('today'); setProjectFilter('all'); setCurrentDate(new Date()); }}>
+                        <button className={`nav-item ${viewMode === 'today' && projectFilter === 'all' ? 'active' : ''}`} onClick={() => { setViewMode('today'); setProjectFilter('all'); setCurrentDate(new Date()); }}>
                             <Icon name="calendar" size={16} /> Today
                         </button>
-                        <button className={\`nav-item \${viewMode === 'upcoming' && projectFilter === 'all' ? 'active' : ''}\`} onClick={() => { setViewMode('upcoming'); setProjectFilter('all'); }}>
+                        <button className={`nav-item ${viewMode === 'upcoming' && projectFilter === 'all' ? 'active' : ''}`} onClick={() => { setViewMode('upcoming'); setProjectFilter('all'); }}>
                             <Icon name="calendar" size={16} /> Upcoming
                         </button>
                         <button className="nav-item">
@@ -151,7 +164,7 @@ export default function SchedulePage() {
                         {companies.map(company => (
                             <button 
                                 key={company.id} 
-                                className={\`nav-item project-item \${projectFilter === company.id ? 'active' : ''}\`}
+                                className={`nav-item project-item ${projectFilter === company.id ? 'active' : ''}`}
                                 onClick={() => setProjectFilter(company.id)}
                             >
                                 <span className="color-dot" style={{ backgroundColor: company.color || '#94a3b8' }}></span> {company.name}
@@ -159,18 +172,14 @@ export default function SchedulePage() {
                         ))}
                     </div>
 
-                    {/* Expandable Mini Calendar Placeholder */}
                     <div className="sidebar-mini-calendar">
                         <div className="section-title">Calendar jumps coming soon</div>
                     </div>
                 </div>
 
-                {/* ==================================================== */}
                 {/* AKIFLOW-STYLE MAIN TIMELINE */}
-                {/* ==================================================== */}
                 <div className="schedule-main">
                     
-                    {/* Header Bar */}
                     <div className="timeline-header-bar">
                         {!sidebarOpen && (
                             <button className="btn-icon" onClick={toggleSidebar}>
@@ -188,7 +197,7 @@ export default function SchedulePage() {
                                     {[1, 3, 5, 7].map(days => (
                                         <button 
                                             key={days}
-                                            className={\`horizon-btn \${horizonDays === days ? 'active' : ''}\`}
+                                            className={`horizon-btn ${horizonDays === days ? 'active' : ''}`}
                                             onClick={() => setHorizonDays(days)}
                                         >
                                             {days}D
@@ -197,7 +206,7 @@ export default function SchedulePage() {
                                 </div>
                             )}
                             <button 
-                                className={\`btn btn-ghost btn-sm \${showSessions ? 'active-toggle' : ''}\`}
+                                className={`btn btn-ghost btn-sm ${showSessions ? 'active-toggle' : ''}`}
                                 onClick={() => setShowSessions(!showSessions)}
                             >
                                 <Icon name="eye" size={14} /> Show Sessions
@@ -205,16 +214,15 @@ export default function SchedulePage() {
                         </div>
                     </div>
 
-                    {/* TIMELINE VIEW OR INBOX VIEW */}
                     {viewMode === 'inbox' ? (
                         <div style={{ padding: '24px', overflowY: 'auto' }}>
                             <h3 style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Unscheduled Tasks</h3>
                             <div className="dateless-tasks-row" style={{ maxWidth: '600px' }}>
                                 {tasks.filter(t => !t.scheduled_date && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter)).map(task => (
-                                    <div key={task.id} className="dateless-task">
-                                        <div className="checkbox"></div>
+                                    <div key={task.id} className="dateless-task" onClick={() => setSelectedTask(task)}>
+                                        <div className="checkbox" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); handleSaveTask({...task, status: 'done'}); }}></div>
                                         <span>{task.title}</span>
-                                        {task.task_size && <span className={\`stat-badge \${task.task_size}\`} style={{marginLeft: 'auto'}}>{task.task_size}</span>}
+                                        {task.task_size && <span className={`stat-badge ${task.task_size}`} style={{marginLeft: 'auto'}}>{task.task_size}</span>}
                                     </div>
                                 ))}
                                 {tasks.filter(t => !t.scheduled_date && t.status !== 'done').length === 0 && (
@@ -228,7 +236,6 @@ export default function SchedulePage() {
                                 const iso = getSafeDate(dateObj);
                                 const dayOfWeek = dateObj.getDay();
                                 
-                                // Filter Data for this specific column
                                 const dayTasks = tasks.filter(t => t.scheduled_date === iso && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter));
                                 const timedTasks = dayTasks.filter(t => t.scheduled_start_time);
                                 const datelessTasks = dayTasks.filter(t => !t.scheduled_start_time);
@@ -243,50 +250,46 @@ export default function SchedulePage() {
                                 return (
                                     <div key={dsi} className="timeline-day-column">
                                         
-                                        {/* Column Header */}
                                         <div className="day-header-inbox">
-                                            <div style={{ padding: '0 12px 8px', fontWeight: 600, fontSize: '0.95rem', color: dateObj.toDateString() === today.toDateString() ? 'var(--accent)' : 'var(--text-primary)' }}>
+                                            <div style={{ padding: '0 12px 8px', fontWeight: 600, fontSize: '0.95rem', color: dateObj.toDateString() === new Date().toDateString() ? 'var(--accent)' : 'var(--text-primary)' }}>
                                                 {DAY_NAMES[dayOfWeek]}, {MONTH_NAMES[dateObj.getMonth()]} {dateObj.getDate()}
                                             </div>
                                             <div className="day-stats" style={{ padding: '0 12px' }}>
                                                 {['small', 'medium', 'large'].map(size => {
                                                     const count = dayTasks.filter(t => t.task_size === size).length;
                                                     if (count === 0) return null;
-                                                    return <span key={size} className={\`stat-badge \${size}\`}>{count} {size === 'large' ? 'Lg' : size === 'medium' ? 'Med' : 'Sm'}</span>;
+                                                    return <span key={size} className={`stat-badge ${size}`}>{count} {size === 'large' ? 'Lg' : size === 'medium' ? 'Med' : 'Sm'}</span>;
                                                 })}
                                             </div>
                                             <div className="dateless-tasks-row" style={{ padding: '0 12px' }}>
                                                 {datelessTasks.map(task => (
-                                                    <div key={task.id} className="dateless-task">
-                                                        <div className="checkbox"></div>
+                                                    <div key={task.id} className="dateless-task" onClick={() => setSelectedTask(task)}>
+                                                        <div className="checkbox" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); handleSaveTask({...task, status: 'done'}); }}></div>
                                                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{task.title}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
 
-                                        {/* Vertical Timeline */}
                                         <div className="time-blocks-grid">
-                                            {/* Hourly lines */}
                                             {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
                                                 const hour = i + START_HOUR;
-                                                const formattedHour = hour > 12 ? \`\${hour - 12} PM\` : hour === 12 ? '12 PM' : \`\${hour} AM\`;
+                                                const formattedHour = hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`;
                                                 return (
-                                                    <div key={i} className="time-row" style={{ height: \`\${HOUR_HEIGHT}px\` }}>
+                                                    <div key={i} className="time-row" style={{ height: `${HOUR_HEIGHT}px` }}>
                                                         <div className="time-label">{formattedHour}</div>
                                                         <div className="time-slot"></div>
                                                     </div>
                                                 );
                                             })}
                                             
-                                            {/* Render Recurring Blocks (background layer) */}
                                             {dayBlocks.map(block => {
                                                 const style = getBlockStyle(block.start_time, block.end_time);
                                                 return (
                                                     <div key={block.id} className="mock-block" style={{ 
                                                         ...style, 
-                                                        backgroundColor: \`\${block.color || '#3b82f6'}1a\`, 
-                                                        borderLeft: \`3px solid \${block.color || '#3b82f6'}\`,
+                                                        backgroundColor: `${block.color || '#3b82f6'}1a`, 
+                                                        borderLeft: `3px solid ${block.color || '#3b82f6'}`,
                                                         zIndex: 1
                                                     }}>
                                                         <span className="time">{block.start_time.slice(0,5)} - {block.end_time.slice(0,5)}</span>
@@ -295,14 +298,14 @@ export default function SchedulePage() {
                                                 );
                                             })}
 
-                                            {/* Render Timed Tasks (foreground layer) */}
                                             {timedTasks.map(task => {
                                                 const style = getBlockStyle(task.scheduled_start_time, task.scheduled_end_time || task.scheduled_start_time);
                                                 return (
                                                     <div key={task.id} className="mock-block task-block" style={{ 
                                                         ...style,
-                                                        zIndex: 2
-                                                    }}>
+                                                        zIndex: 2,
+                                                        cursor: 'pointer'
+                                                    }} onClick={() => setSelectedTask(task)}>
                                                         <span className="time">{task.scheduled_start_time.slice(0,5)}</span>
                                                         <strong>{task.title}</strong>
                                                     </div>
@@ -317,7 +320,89 @@ export default function SchedulePage() {
                 </div>
             </div>
 
-            <style jsx>{\`
+            {/* Edit Task Modal */}
+            {selectedTask && (
+                <div className="modal-overlay" onClick={() => setSelectedTask(null)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Edit Task</h3>
+                            <button className="btn-icon" onClick={() => setSelectedTask(null)}>
+                                <Icon name="close" size={16} />
+                            </button>
+                        </div>
+                        <input 
+                            type="text" 
+                            className="input" 
+                            value={selectedTask.title} 
+                            onChange={(e) => setSelectedTask({...selectedTask, title: e.target.value})}
+                            style={{ fontSize: '1.1rem', fontWeight: 600, padding: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                        />
+                        <textarea 
+                            className="input" 
+                            value={selectedTask.description || ''} 
+                            onChange={(e) => setSelectedTask({...selectedTask, description: e.target.value})}
+                            placeholder="Add notes or description..."
+                            style={{ minHeight: '80px', marginTop: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                        />
+                        
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Date</label>
+                                <input 
+                                    type="date" 
+                                    className="input" 
+                                    value={selectedTask.scheduled_date || ''} 
+                                    onChange={(e) => setSelectedTask({...selectedTask, scheduled_date: e.target.value || null})}
+                                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                                />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Start Time</label>
+                                <input 
+                                    type="time" 
+                                    className="input" 
+                                    value={selectedTask.scheduled_start_time || ''} 
+                                    onChange={(e) => setSelectedTask({...selectedTask, scheduled_start_time: e.target.value || null})}
+                                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '16px' }}>
+                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Task Size</label>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {['small', 'medium', 'large'].map(sz => (
+                                    <button 
+                                        key={sz}
+                                        className={`btn btn-sm ${selectedTask.task_size === sz ? 'btn-primary' : 'btn-ghost'}`}
+                                        onClick={() => setSelectedTask({...selectedTask, task_size: sz})}
+                                        style={{ flex: 1, textTransform: 'capitalize' }}
+                                    >
+                                        {sz}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                            <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={() => handleSaveTask({ status: 'done' })}>
+                                <Icon name="check-circle" size={16} /> Mark Done
+                            </button>
+                            <button className="btn btn-primary" onClick={() => handleSaveTask({ 
+                                title: selectedTask.title, 
+                                description: selectedTask.description, 
+                                scheduled_date: selectedTask.scheduled_date, 
+                                scheduled_start_time: selectedTask.scheduled_start_time,
+                                task_size: selectedTask.task_size
+                            })}>
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <style jsx>{`
                 .schedule-workspace {
                     display: flex;
                     height: calc(100vh - 64px); 
@@ -542,6 +627,10 @@ export default function SchedulePage() {
                     border: 2px solid var(--text-muted);
                     border-radius: 4px;
                     flex-shrink: 0;
+                    cursor: pointer;
+                }
+                .checkbox:hover {
+                    border-color: var(--accent);
                 }
 
                 .time-blocks-grid {
@@ -587,7 +676,32 @@ export default function SchedulePage() {
                     border: 1px solid var(--border-color);
                     border-left: 3px solid var(--text-primary);
                 }
-            \`}</style>
+                .mock-block.task-block:hover, .dateless-task:hover {
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    transform: translateY(-1px);
+                    transition: all 0.2s;
+                }
+
+                /* MODAL */
+                .modal-overlay {
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.6);
+                    backdrop-filter: blur(4px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                }
+                .modal-content {
+                    background: var(--bg-primary);
+                    width: 440px;
+                    border-radius: 16px;
+                    padding: 24px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    border: 1px solid var(--border-color);
+                }
+            `}</style>
         </AppLayout>
     );
 }
