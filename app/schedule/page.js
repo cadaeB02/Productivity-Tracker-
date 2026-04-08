@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/components/AuthProvider';
-import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate, updateScheduleTask, addScheduleTask } from '@/lib/store';
+import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate, updateScheduleTask, addScheduleTask, deleteScheduleTask } from '@/lib/store';
 
 // Helpers
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -59,11 +59,10 @@ export default function SchedulePage() {
         async function load() {
             if (!user) return;
             try {
-                const [cmps, tsks, blks, evts] = await Promise.all([
+                const [cmps, tsks, blks] = await Promise.all([
                     getCompanies(),
                     getScheduleTasks({}),
                     getScheduleBlocks(new Date().getFullYear(), new Date().getMonth() + 1),
-                    // add calendar sync fetch here eventually
                 ]);
                 setCompanies(cmps);
                 setTasks(tsks);
@@ -76,6 +75,27 @@ export default function SchedulePage() {
         }
         load();
     }, [user]);
+
+    // Fetch real work sessions when Show Sessions is enabled
+    useEffect(() => {
+        if (!showSessions || !user) { setSessions([]); return; }
+        async function loadSessions() {
+            try {
+                const start = new Date();
+                const promises = [];
+                for (let i = 0; i < horizonDays; i++) {
+                    const d = new Date(start);
+                    d.setDate(start.getDate() + i);
+                    promises.push(getSessionsForDate(getSafeDate(d)));
+                }
+                const results = await Promise.all(promises);
+                setSessions(results.flat());
+            } catch (err) {
+                console.error("Failed to load sessions", err);
+            }
+        }
+        loadSessions();
+    }, [showSessions, user, horizonDays]);
 
     // Handle Task Updates from Modal
     const handleSaveTask = async (updates) => {
@@ -98,10 +118,22 @@ export default function SchedulePage() {
         try {
             const newTask = await addScheduleTask("New Task", "unknown", "");
             setTasks([newTask, ...tasks]);
-            setSelectedTask(newTask); // Open modal immediately
+            setSelectedTask(newTask);
         } catch (err) {
             console.error(err);
             alert("Failed to create task");
+        }
+    };
+
+    const handleDeleteTask = async (taskId) => {
+        if (!confirm('Delete this task?')) return;
+        try {
+            await deleteScheduleTask(taskId);
+            setTasks(tasks.filter(t => t.id !== taskId));
+            setSelectedTask(null);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete task");
         }
     };
 
@@ -189,7 +221,41 @@ export default function SchedulePage() {
                     </div>
 
                     <div className="sidebar-mini-calendar">
-                        <div className="section-title">Calendar jumps coming soon</div>
+                        {(() => {
+                            const calMonth = currentDate.getMonth();
+                            const calYear = currentDate.getFullYear();
+                            const firstDay = new Date(calYear, calMonth, 1).getDay();
+                            const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+                            const todayStr = getSafeDate(new Date());
+                            const cells = [];
+                            for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} className="cal-cell empty" />);
+                            for (let d = 1; d <= daysInMonth; d++) {
+                                const dateObj = new Date(calYear, calMonth, d);
+                                const dateStr = getSafeDate(dateObj);
+                                const isToday = dateStr === todayStr;
+                                const isSelected = dateStr === getSafeDate(currentDate);
+                                cells.push(
+                                    <button 
+                                        key={d} 
+                                        className={`cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
+                                        onClick={() => { setCurrentDate(dateObj); setViewMode('today'); }}
+                                    >{d}</button>
+                                );
+                            }
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                        <button className="btn-icon" onClick={() => setCurrentDate(new Date(calYear, calMonth - 1, 1))}><Icon name="chevron-left" size={14} /></button>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{MONTH_NAMES[calMonth]} {calYear}</span>
+                                        <button className="btn-icon" onClick={() => setCurrentDate(new Date(calYear, calMonth + 1, 1))}><Icon name="chevron-right" size={14} /></button>
+                                    </div>
+                                    <div className="mini-cal-grid">
+                                        {['S','M','T','W','T','F','S'].map((d,i) => <div key={i} className="cal-cell header">{d}</div>)}
+                                        {cells}
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
 
@@ -353,6 +419,28 @@ export default function SchedulePage() {
                                                 );
                                             })}
 
+                                            {/* Show Sessions overlay */}
+                                            {showSessions && sessions.filter(s => {
+                                                const sDate = s.start_time?.split('T')[0];
+                                                return sDate === iso;
+                                            }).map(session => {
+                                                const startLocal = new Date(session.start_time);
+                                                const endLocal = session.end_time ? new Date(session.end_time) : new Date();
+                                                const sTimeStr = `${startLocal.getHours().toString().padStart(2,'0')}:${startLocal.getMinutes().toString().padStart(2,'0')}`;
+                                                const eTimeStr = `${endLocal.getHours().toString().padStart(2,'0')}:${endLocal.getMinutes().toString().padStart(2,'0')}`;
+                                                const style = getBlockStyle(sTimeStr, eTimeStr);
+                                                const color = session.companies?.color || '#94a3b8';
+                                                return (
+                                                    <div key={session.id} className="session-block" style={{
+                                                        ...style,
+                                                        backgroundColor: `${color}20`,
+                                                        borderLeft: `2px solid ${color}`,
+                                                    }}>
+                                                        {session.companies?.name || 'Session'} - {sTimeStr} to {eTimeStr}
+                                                    </div>
+                                                );
+                                            })}
+
                                             {timedTasks.map(task => {
                                                 const style = getBlockStyle(task.scheduled_start_time, task.scheduled_end_time || task.scheduled_start_time);
                                                 return (
@@ -416,6 +504,19 @@ export default function SchedulePage() {
                                                     </div>
                                                 );
                                             })}
+                                            {/* Current Time Indicator */}
+                                            {dateObj.toDateString() === new Date().toDateString() && (() => {
+                                                const now = new Date();
+                                                const nowMins = now.getHours() * 60 + now.getMinutes();
+                                                const topPx = ((nowMins - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+                                                if (topPx < 0) return null;
+                                                return (
+                                                    <div className="now-indicator" style={{ top: `${topPx}px` }}>
+                                                        <div className="now-dot" />
+                                                        <div className="now-line" />
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 );
@@ -450,6 +551,19 @@ export default function SchedulePage() {
                             style={{ minHeight: '80px', marginTop: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                         />
                         
+                        <div style={{ marginTop: '16px' }}>
+                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Project</label>
+                            <select 
+                                className="input" 
+                                value={selectedTask.company_id || ''} 
+                                onChange={(e) => setSelectedTask({...selectedTask, company_id: e.target.value || null})}
+                                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', width: '100%' }}
+                            >
+                                <option value="">No project</option>
+                                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
+
                         <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Date</label>
@@ -471,6 +585,16 @@ export default function SchedulePage() {
                                     style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                                 />
                             </div>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>End Time</label>
+                                <input 
+                                    type="time" 
+                                    className="input" 
+                                    value={selectedTask.scheduled_end_time || ''} 
+                                    onChange={(e) => setSelectedTask({...selectedTask, scheduled_end_time: e.target.value || null})}
+                                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                                />
+                            </div>
                         </div>
 
                         <div style={{ marginTop: '16px' }}>
@@ -489,16 +613,23 @@ export default function SchedulePage() {
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                            <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={() => handleSaveTask({ status: 'done' })}>
-                                <Icon name="check-circle" size={16} /> Mark Done
-                            </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={() => handleSaveTask({ status: 'done' })}>
+                                    <Icon name="check-circle" size={16} /> Done
+                                </button>
+                                <button className="btn btn-ghost" style={{ color: 'var(--text-muted)' }} onClick={() => handleDeleteTask(selectedTask.id)}>
+                                    <Icon name="trash" size={16} /> Delete
+                                </button>
+                            </div>
                             <button className="btn btn-primary" onClick={() => handleSaveTask({ 
                                 title: selectedTask.title, 
                                 description: selectedTask.description, 
                                 scheduled_date: selectedTask.scheduled_date, 
                                 scheduled_start_time: selectedTask.scheduled_start_time,
-                                task_size: selectedTask.task_size
+                                scheduled_end_time: selectedTask.scheduled_end_time,
+                                task_size: selectedTask.task_size,
+                                company_id: selectedTask.company_id
                             })}>
                                 Save Changes
                             </button>
@@ -608,8 +739,47 @@ export default function SchedulePage() {
                     border-radius: 50%;
                 }
                 .sidebar-mini-calendar {
-                    padding: 0 8px 16px;
+                    padding: 0 12px 16px;
                     margin-top: auto;
+                }
+                .mini-cal-grid {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    gap: 1px;
+                }
+                .cal-cell {
+                    width: 100%;
+                    aspect-ratio: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 0.7rem;
+                    border: none;
+                    background: none;
+                    color: var(--text-secondary);
+                    cursor: pointer;
+                    border-radius: 50%;
+                }
+                .cal-cell:hover:not(.empty):not(.header) {
+                    background: var(--bg-tertiary);
+                }
+                .cal-cell.header {
+                    font-weight: 700;
+                    color: var(--text-muted);
+                    font-size: 0.65rem;
+                    cursor: default;
+                }
+                .cal-cell.empty { cursor: default; }
+                .cal-cell.today {
+                    background: var(--accent);
+                    color: #fff;
+                    font-weight: 700;
+                }
+                .cal-cell.selected:not(.today) {
+                    background: var(--bg-tertiary);
+                    color: var(--text-primary);
+                    font-weight: 700;
+                    box-shadow: inset 0 0 0 2px var(--accent);
                 }
 
                 .schedule-main {
@@ -824,6 +994,42 @@ export default function SchedulePage() {
                     padding: 24px;
                     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
                     border: 1px solid var(--border-color);
+                }
+
+                /* Current time indicator */
+                .now-indicator {
+                    position: absolute;
+                    left: 50px;
+                    right: 0;
+                    z-index: 5;
+                    pointer-events: none;
+                    display: flex;
+                    align-items: center;
+                }
+                .now-dot {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                    background: #ef4444;
+                    flex-shrink: 0;
+                }
+                .now-line {
+                    flex: 1;
+                    height: 2px;
+                    background: #ef4444;
+                }
+
+                /* Session overlay blocks */
+                .session-block {
+                    position: absolute;
+                    left: 60px;
+                    right: 16px;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    font-size: 0.7rem;
+                    opacity: 0.5;
+                    pointer-events: none;
+                    z-index: 0;
                 }
             `}</style>
         </AppLayout>
