@@ -53,6 +53,11 @@ export default function SchedulePage() {
     // Modal State
     const [selectedTask, setSelectedTask] = useState(null);
 
+    // Search & Filter state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sizeFilter, setSizeFilter] = useState('all');
+    const [searchOpen, setSearchOpen] = useState(false);
+
     // Drag & Drop / Resizing state
     const [dragOverCell, setDragOverCell] = useState(null);
     const [resizing, setResizing] = useState(null);
@@ -204,10 +209,36 @@ export default function SchedulePage() {
                         <button className={`nav-item ${viewMode === 'upcoming' && projectFilter === 'all' ? 'active' : ''}`} onClick={() => { setViewMode('upcoming'); setProjectFilter('all'); }}>
                             <Icon name="calendar" size={16} /> Upcoming
                         </button>
-                        <button className="nav-item">
+                        <button className={`nav-item ${searchOpen ? 'active' : ''}`} onClick={() => setSearchOpen(!searchOpen)}>
                             <Icon name="search" size={16} /> Search & Filters
                         </button>
                     </div>
+
+                    {searchOpen && (
+                        <div className="sidebar-nav-section" style={{ padding: '0 8px 12px' }}>
+                            <input
+                                className="input"
+                                type="text"
+                                placeholder="Search tasks..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                autoFocus
+                                style={{ fontSize: '0.8rem', padding: '8px 12px', marginBottom: '6px' }}
+                            />
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                {['all', 'small', 'medium', 'large'].map(s => (
+                                    <button
+                                        key={s}
+                                        className={`horizon-btn ${sizeFilter === s ? 'active' : ''}`}
+                                        onClick={() => setSizeFilter(s)}
+                                        style={{ fontSize: '0.7rem', padding: '4px 8px', flex: 1 }}
+                                    >
+                                        {s === 'all' ? 'All' : s === 'small' ? 'S' : s === 'medium' ? 'M' : 'L'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="sidebar-nav-section">
                         <div className="section-title">My Projects</div>
@@ -305,7 +336,7 @@ export default function SchedulePage() {
                         <div style={{ padding: '24px', overflowY: 'auto' }}>
                             <h3 style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Unscheduled Tasks</h3>
                             <div className="dateless-tasks-row" style={{ maxWidth: '600px' }}>
-                                {tasks.filter(t => !t.scheduled_date && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter)).map(task => (
+                                {tasks.filter(t => !t.scheduled_date && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter) && (!searchQuery || t.title?.toLowerCase().includes(searchQuery.toLowerCase())) && (sizeFilter === 'all' || t.task_size === sizeFilter)).map(task => (
                                     <div 
                                         key={task.id} 
                                         className="dateless-task" 
@@ -386,13 +417,22 @@ export default function SchedulePage() {
                                                                 e.preventDefault();
                                                                 setDragOverCell(null);
                                                                 const taskId = e.dataTransfer.getData('taskId');
-                                                                if (!taskId) return;
-                                                                const task = tasks.find(t => t.id === taskId);
+                                                                const rescheduleId = e.dataTransfer.getData('rescheduleId');
+                                                                const effectiveId = rescheduleId || taskId;
+                                                                if (!effectiveId) return;
+                                                                const task = tasks.find(t => t.id === effectiveId);
                                                                 if (!task) return;
                                                                 
-                                                                let durationMins = 30; // Small
-                                                                if (task.task_size === 'medium') durationMins = 60;
-                                                                if (task.task_size === 'large') durationMins = 90;
+                                                                // For reschedule, preserve original duration; for new drops, use size-based
+                                                                let durationMins;
+                                                                if (rescheduleId && task.scheduled_start_time && task.scheduled_end_time) {
+                                                                    durationMins = parseTimeToMinutes(task.scheduled_end_time) - parseTimeToMinutes(task.scheduled_start_time);
+                                                                    if (durationMins <= 0) durationMins = 30;
+                                                                } else {
+                                                                    durationMins = 30;
+                                                                    if (task.task_size === 'medium') durationMins = 60;
+                                                                    if (task.task_size === 'large') durationMins = 90;
+                                                                }
                                                                 
                                                                 const endHourVal = hour + Math.floor(durationMins / 60);
                                                                 const endMinsVal = durationMins % 60;
@@ -401,8 +441,8 @@ export default function SchedulePage() {
                                                                 const sTime = `${hour.toString().padStart(2, '0')}:00:00`;
                                                                 const eTime = `${Math.min(23, endHourVal).toString().padStart(2, '0')}:${endMinsVal.toString().padStart(2, '0')}:00`;
 
-                                                                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, scheduled_date: sDate, scheduled_start_time: sTime, scheduled_end_time: eTime, status: 'scheduled' } : t));
-                                                                try { await updateScheduleTask(taskId, { scheduled_date: sDate, scheduled_start_time: sTime, scheduled_end_time: eTime, status: 'scheduled' }); } catch(err) { console.error(err); }
+                                                                setTasks(prev => prev.map(t => t.id === effectiveId ? { ...t, scheduled_date: sDate, scheduled_start_time: sTime, scheduled_end_time: eTime, status: 'scheduled' } : t));
+                                                                try { await updateScheduleTask(effectiveId, { scheduled_date: sDate, scheduled_start_time: sTime, scheduled_end_time: eTime, status: 'scheduled' }); } catch(err) { console.error(err); }
                                                             }}
                                                         ></div>
                                                     </div>
@@ -447,15 +487,29 @@ export default function SchedulePage() {
                                                 );
                                             })}
 
-                                            {timedTasks.map(task => {
+                                            {timedTasks.filter(t => (!searchQuery || t.title?.toLowerCase().includes(searchQuery.toLowerCase())) && (sizeFilter === 'all' || t.task_size === sizeFilter)).map(task => {
                                                 const style = getBlockStyle(task.scheduled_start_time, task.scheduled_end_time || task.scheduled_start_time);
+                                                const taskCompany = companies.find(c => c.id === task.company_id);
+                                                const taskColor = taskCompany?.color || '#6366f1';
                                                 return (
-                                                    <div key={task.id} className="mock-block task-block" style={{ 
-                                                        ...style,
-                                                        zIndex: 2,
-                                                        cursor: 'pointer',
-                                                        touchAction: 'none'
-                                                    }} onClick={() => { if (!resizing) setSelectedTask(task); }}>
+                                                    <div 
+                                                        key={task.id} 
+                                                        className="mock-block task-block" 
+                                                        style={{ 
+                                                            ...style,
+                                                            zIndex: 2,
+                                                            cursor: 'grab',
+                                                            touchAction: 'none',
+                                                            backgroundColor: `${taskColor}18`,
+                                                            borderLeft: `3px solid ${taskColor}`,
+                                                        }} 
+                                                        draggable
+                                                        onDragStart={(e) => {
+                                                            e.dataTransfer.setData('rescheduleId', task.id);
+                                                            e.dataTransfer.effectAllowed = 'move';
+                                                        }}
+                                                        onClick={() => { if (!resizing) setSelectedTask(task); }}
+                                                    >
                                                         <span className="time">{task.scheduled_start_time.slice(0,5)} {task.scheduled_end_time && `- ${task.scheduled_end_time.slice(0,5)}`}</span>
                                                         <strong>{task.title}</strong>
                                                         
