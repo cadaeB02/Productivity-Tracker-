@@ -828,7 +828,7 @@ export default function SchedulePage() {
                     cursor: pointer;
                     border-radius: 50%;
                 }
-                .cal-cell:hover:not(.empty):not(.header) {
+                .cal-cell:hover:not(.empty):not(.header):not(.today) {
                     background: var(--bg-tertiary);
                 }
                 .cal-cell.header {
