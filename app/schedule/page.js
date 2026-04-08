@@ -408,7 +408,7 @@ export default function SchedulePage() {
                                                 const cellId = `${dsi}-${hour}`;
                                                 return (
                                                     <div key={i} className="time-row" style={{ height: `${HOUR_HEIGHT}px` }}>
-                                                        <div className="time-label">{formattedHour}</div>
+                                                        <div className="time-label" style={{ visibility: dsi === 0 ? 'visible' : 'hidden' }}>{formattedHour}</div>
                                                         <div 
                                                             className={`time-slot ${dragOverCell === cellId ? 'drag-over' : ''}`}
                                                             onDragOver={(e) => { e.preventDefault(); setDragOverCell(cellId); }}
@@ -465,36 +465,50 @@ export default function SchedulePage() {
                                             })}
 
                                             {/* Show Sessions overlay */}
-                                            {showSessions && sessions.filter(s => {
-                                                const sDate = s.start_time?.split('T')[0];
-                                                return sDate === iso;
-                                            }).map(session => {
-                                                const startLocal = new Date(session.start_time);
-                                                const endLocal = session.end_time ? new Date(session.end_time) : new Date();
-                                                const sTimeStr = `${startLocal.getHours().toString().padStart(2,'0')}:${startLocal.getMinutes().toString().padStart(2,'0')}`;
-                                                const eTimeStr = `${endLocal.getHours().toString().padStart(2,'0')}:${endLocal.getMinutes().toString().padStart(2,'0')}`;
-                                                const style = getBlockStyle(sTimeStr, eTimeStr);
-                                                const color = session.companies?.color || '#94a3b8';
-                                                return (
-                                                    <div key={session.id} className="session-block" style={{
-                                                        ...style,
-                                                        backgroundColor: `${color}20`,
-                                                        borderLeft: `2px solid ${color}`,
-                                                        right: '30%',
-                                                    }}>
-                                                        <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{session.companies?.name || 'Session'}</span>
-                                                    </div>
-                                                );
-                                            })}
+                                            {showSessions && (() => {
+                                                const daySessions = sessions.filter(s => {
+                                                    const sDate = s.start_time?.split('T')[0];
+                                                    return sDate === iso;
+                                                });
+                                                return daySessions.map((session, si) => {
+                                                    const startLocal = new Date(session.start_time);
+                                                    const endLocal = session.end_time ? new Date(session.end_time) : new Date();
+                                                    const sTimeStr = `${startLocal.getHours().toString().padStart(2,'0')}:${startLocal.getMinutes().toString().padStart(2,'0')}`;
+                                                    const eTimeStr = `${endLocal.getHours().toString().padStart(2,'0')}:${endLocal.getMinutes().toString().padStart(2,'0')}`;
+                                                    const startMin = parseTimeToMinutes(sTimeStr);
+                                                    const topPx = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+                                                    const color = session.companies?.color || '#94a3b8';
+                                                    // Stack horizontally: each session pill offsets by 50% of remaining width
+                                                    const overlaps = daySessions.filter((s2, s2i) => {
+                                                        if (s2i === si) return false;
+                                                        const s2Start = new Date(s2.start_time);
+                                                        const s2End = s2.end_time ? new Date(s2.end_time) : new Date();
+                                                        return startLocal < s2End && endLocal > s2Start;
+                                                    }).length;
+                                                    const leftOffset = overlaps > 0 ? si * 30 : 0;
+                                                    return (
+                                                        <div key={session.id} className="session-pill" style={{
+                                                            top: `${topPx}px`,
+                                                            left: `${70 + leftOffset}px`,
+                                                            backgroundColor: `${color}30`,
+                                                            borderLeft: `3px solid ${color}`,
+                                                            color: color,
+                                                        }}>
+                                                            {session.companies?.name?.split(' ')[0] || 'Work'}
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
 
                                             {timedTasks.filter(t => (!searchQuery || t.title?.toLowerCase().includes(searchQuery.toLowerCase())) && (sizeFilter === 'all' || t.task_size === sizeFilter)).map(task => {
                                                 const style = getBlockStyle(task.scheduled_start_time, task.scheduled_end_time || task.scheduled_start_time);
                                                 const taskCompany = companies.find(c => c.id === task.company_id);
                                                 const taskColor = taskCompany?.color || '#6366f1';
+                                                const isCompact = horizonDays >= 5;
                                                 return (
                                                     <div 
                                                         key={task.id} 
-                                                        className="mock-block task-block" 
+                                                        className={`mock-block task-block ${isCompact ? 'compact' : ''}`}
                                                         style={{ 
                                                             ...style,
                                                             zIndex: 2,
@@ -505,21 +519,29 @@ export default function SchedulePage() {
                                                         }} 
                                                         onClick={() => { if (!resizing) setSelectedTask(task); }}
                                                     >
-                                                        <div 
-                                                            className="drag-handle"
-                                                            draggable
-                                                            onDragStart={(e) => {
-                                                                e.stopPropagation();
-                                                                e.dataTransfer.setData('rescheduleId', task.id);
-                                                                e.dataTransfer.effectAllowed = 'move';
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            title="Drag to reschedule"
-                                                        >
-                                                            <Icon name="grid" size={10} />
-                                                        </div>
-                                                        <span className="time">{task.scheduled_start_time.slice(0,5)} {task.scheduled_end_time && `- ${task.scheduled_end_time.slice(0,5)}`}</span>
-                                                        <strong>{task.title}</strong>
+                                                        {!isCompact && (
+                                                            <div 
+                                                                className="drag-handle"
+                                                                draggable
+                                                                onDragStart={(e) => {
+                                                                    e.stopPropagation();
+                                                                    e.dataTransfer.setData('rescheduleId', task.id);
+                                                                    e.dataTransfer.effectAllowed = 'move';
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                title="Drag to reschedule"
+                                                            >
+                                                                <Icon name="grid" size={10} />
+                                                            </div>
+                                                        )}
+                                                        {isCompact ? (
+                                                            <strong style={{ fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</strong>
+                                                        ) : (
+                                                            <>
+                                                                <span className="time">{task.scheduled_start_time.slice(0,5)} {task.scheduled_end_time && `- ${task.scheduled_end_time.slice(0,5)}`}</span>
+                                                                <strong>{task.title}</strong>
+                                                            </>
+                                                        )}
                                                         
                                                         <div 
                                                             className="resize-handle"
@@ -1110,17 +1132,29 @@ export default function SchedulePage() {
                     background: #ef4444;
                 }
 
-                /* Session overlay blocks */
-                .session-block {
+                /* Session pills */
+                .session-pill {
                     position: absolute;
-                    left: 70px;
-                    right: 16px;
-                    border-radius: 4px;
-                    padding: 2px 8px;
-                    font-size: 0.7rem;
-                    opacity: 0.5;
+                    height: 22px;
+                    border-radius: 11px;
+                    padding: 2px 10px;
+                    font-size: 0.65rem;
+                    font-weight: 600;
                     pointer-events: none;
                     z-index: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 120px;
+                    display: flex;
+                    align-items: center;
+                }
+
+                /* Compact task blocks for 5D/7D */
+                .task-block.compact {
+                    padding: 2px 6px !important;
+                    border-radius: 6px !important;
+                    min-height: 0 !important;
                 }
             `}</style>
         </AppLayout>
