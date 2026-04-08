@@ -58,7 +58,7 @@ export default function SchedulePage() {
                 const [cmps, tsks, blks, evts] = await Promise.all([
                     getCompanies(),
                     getScheduleTasks({}),
-                    getScheduleBlocks(),
+                    getScheduleBlocks(new Date().getFullYear(), new Date().getMonth() + 1),
                     // add calendar sync fetch here eventually
                 ]);
                 setCompanies(cmps);
