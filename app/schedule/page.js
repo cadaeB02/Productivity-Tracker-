@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/components/AuthProvider';
 import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSessionsForDate, updateScheduleTask, addScheduleTask, deleteScheduleTask } from '@/lib/store';
+import { useCompany } from '@/components/CompanyContext';
 
 // Helpers
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -25,11 +26,12 @@ function getSafeDate(dateObj) {
 
 export default function SchedulePage() {
     const { user } = useAuth();
+    const { activeCompanyId } = useCompany();
     
     // Core Layout State
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [viewMode, setViewMode] = useState('today'); // 'inbox', 'today', 'upcoming'
-    const [horizonDays, setHorizonDays] = useState(1); // 1, 3, 5, 7
+    const [viewMode, setViewMode] = useState('today');
+    const [horizonDays, setHorizonDays] = useState(1);
     const [showSessions, setShowSessions] = useState(false);
     
     // Filters Context
@@ -53,6 +55,11 @@ export default function SchedulePage() {
     const [resizing, setResizing] = useState(null);
 
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+    // Sync projectFilter with global company switcher
+    useEffect(() => {
+        setProjectFilter(activeCompanyId || 'all');
+    }, [activeCompanyId]);
 
     // Initial Fetch
     useEffect(() => {
@@ -103,11 +110,7 @@ export default function SchedulePage() {
         try {
             const updated = await updateScheduleTask(selectedTask.id, updates);
             setTasks(tasks.map(t => t.id === updated.id ? updated : t));
-            if (updates.status === 'done') {
-                setSelectedTask(null);
-            } else {
-                setSelectedTask({ ...selectedTask, ...updates });
-            }
+            setSelectedTask(null);
         } catch (err) {
             console.error(err);
             alert("Failed to update task");
@@ -435,8 +438,9 @@ export default function SchedulePage() {
                                                         ...style,
                                                         backgroundColor: `${color}20`,
                                                         borderLeft: `2px solid ${color}`,
+                                                        right: '30%',
                                                     }}>
-                                                        {session.companies?.name || 'Session'} - {sTimeStr} to {eTimeStr}
+                                                        <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{session.companies?.name || 'Session'}</span>
                                                     </div>
                                                 );
                                             })}
@@ -449,7 +453,7 @@ export default function SchedulePage() {
                                                         zIndex: 2,
                                                         cursor: 'pointer',
                                                         touchAction: 'none'
-                                                    }} onClick={() => setSelectedTask(task)}>
+                                                    }} onClick={() => { if (!resizing) setSelectedTask(task); }}>
                                                         <span className="time">{task.scheduled_start_time.slice(0,5)} {task.scheduled_end_time && `- ${task.scheduled_end_time.slice(0,5)}`}</span>
                                                         <strong>{task.title}</strong>
                                                         
@@ -541,14 +545,14 @@ export default function SchedulePage() {
                             className="input" 
                             value={selectedTask.title} 
                             onChange={(e) => setSelectedTask({...selectedTask, title: e.target.value})}
-                            style={{ fontSize: '1.1rem', fontWeight: 600, padding: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                            style={{ fontSize: '1.1rem', fontWeight: 600, padding: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
                         />
                         <textarea 
                             className="input" 
                             value={selectedTask.description || ''} 
                             onChange={(e) => setSelectedTask({...selectedTask, description: e.target.value})}
                             placeholder="Add notes or description..."
-                            style={{ minHeight: '80px', marginTop: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                            style={{ minHeight: '80px', marginTop: '12px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
                         />
                         
                         <div style={{ marginTop: '16px' }}>
@@ -910,6 +914,7 @@ export default function SchedulePage() {
 
                 .time-blocks-grid {
                     position: relative;
+                    padding-top: 10px;
                     padding-bottom: 40px;
                 }
                 .time-row {
@@ -1004,7 +1009,7 @@ export default function SchedulePage() {
                     position: absolute;
                     left: 60px;
                     right: 0;
-                    z-index: 5;
+                    z-index: 1;
                     pointer-events: none;
                     display: flex;
                     align-items: center;
