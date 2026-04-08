@@ -48,6 +48,10 @@ export default function SchedulePage() {
     // Modal State
     const [selectedTask, setSelectedTask] = useState(null);
 
+    // Drag & Drop / Resizing state
+    const [dragOverCell, setDragOverCell] = useState(null);
+    const [resizing, setResizing] = useState(null);
+
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
     // Initial Fetch
@@ -231,7 +235,13 @@ export default function SchedulePage() {
                             <h3 style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Unscheduled Tasks</h3>
                             <div className="dateless-tasks-row" style={{ maxWidth: '600px' }}>
                                 {tasks.filter(t => !t.scheduled_date && t.status !== 'done' && (projectFilter === 'all' || t.company_id === projectFilter)).map(task => (
-                                    <div key={task.id} className="dateless-task" onClick={() => setSelectedTask(task)}>
+                                    <div 
+                                        key={task.id} 
+                                        className="dateless-task" 
+                                        draggable 
+                                        onDragStart={(e) => { e.dataTransfer.setData('taskId', task.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                        onClick={() => setSelectedTask(task)}
+                                    >
                                         <div className="checkbox" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); handleSaveTask({...task, status: 'done'}); }}></div>
                                         <span>{task.title}</span>
                                         {task.task_size && <span className={`stat-badge ${task.task_size}`} style={{marginLeft: 'auto'}}>{task.task_size}</span>}
@@ -275,7 +285,13 @@ export default function SchedulePage() {
                                             </div>
                                             <div className="dateless-tasks-row" style={{ padding: '0 12px' }}>
                                                 {datelessTasks.map(task => (
-                                                    <div key={task.id} className="dateless-task" onClick={() => setSelectedTask(task)}>
+                                                    <div 
+                                                        key={task.id} 
+                                                        className="dateless-task" 
+                                                        draggable 
+                                                        onDragStart={(e) => { e.dataTransfer.setData('taskId', task.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                        onClick={() => setSelectedTask(task)}
+                                                    >
                                                         <div className="checkbox" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); handleSaveTask({...task, status: 'done'}); }}></div>
                                                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{task.title}</span>
                                                     </div>
@@ -287,10 +303,37 @@ export default function SchedulePage() {
                                             {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
                                                 const hour = i + START_HOUR;
                                                 const formattedHour = hour === 0 ? '12 AM' : hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`;
+                                                const cellId = `${dsi}-${hour}`;
                                                 return (
                                                     <div key={i} className="time-row" style={{ height: `${HOUR_HEIGHT}px` }}>
                                                         <div className="time-label">{formattedHour}</div>
-                                                        <div className="time-slot"></div>
+                                                        <div 
+                                                            className={`time-slot ${dragOverCell === cellId ? 'drag-over' : ''}`}
+                                                            onDragOver={(e) => { e.preventDefault(); setDragOverCell(cellId); }}
+                                                            onDragLeave={() => setDragOverCell(null)}
+                                                            onDrop={async (e) => {
+                                                                e.preventDefault();
+                                                                setDragOverCell(null);
+                                                                const taskId = e.dataTransfer.getData('taskId');
+                                                                if (!taskId) return;
+                                                                const task = tasks.find(t => t.id === taskId);
+                                                                if (!task) return;
+                                                                
+                                                                let durationMins = 30; // Small
+                                                                if (task.task_size === 'medium') durationMins = 60;
+                                                                if (task.task_size === 'large') durationMins = 90;
+                                                                
+                                                                const endHourVal = hour + Math.floor(durationMins / 60);
+                                                                const endMinsVal = durationMins % 60;
+                                                                
+                                                                const sDate = iso;
+                                                                const sTime = `${hour.toString().padStart(2, '0')}:00:00`;
+                                                                const eTime = `${Math.min(23, endHourVal).toString().padStart(2, '0')}:${endMinsVal.toString().padStart(2, '0')}:00`;
+
+                                                                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, scheduled_date: sDate, scheduled_start_time: sTime, scheduled_end_time: eTime, status: 'scheduled' } : t));
+                                                                try { await updateScheduleTask(taskId, { scheduled_date: sDate, scheduled_start_time: sTime, scheduled_end_time: eTime, status: 'scheduled' }); } catch(err) { console.error(err); }
+                                                            }}
+                                                        ></div>
                                                     </div>
                                                 );
                                             })}
@@ -316,10 +359,60 @@ export default function SchedulePage() {
                                                     <div key={task.id} className="mock-block task-block" style={{ 
                                                         ...style,
                                                         zIndex: 2,
-                                                        cursor: 'pointer'
+                                                        cursor: 'pointer',
+                                                        touchAction: 'none'
                                                     }} onClick={() => setSelectedTask(task)}>
-                                                        <span className="time">{task.scheduled_start_time.slice(0,5)}</span>
+                                                        <span className="time">{task.scheduled_start_time.slice(0,5)} {task.scheduled_end_time && `- ${task.scheduled_end_time.slice(0,5)}`}</span>
                                                         <strong>{task.title}</strong>
+                                                        
+                                                        <div 
+                                                            className="resize-handle"
+                                                            onPointerDown={(e) => {
+                                                                e.stopPropagation();
+                                                                e.target.setPointerCapture(e.pointerId);
+                                                                
+                                                                let startMins = parseTimeToMinutes(task.scheduled_start_time);
+                                                                let endMins = parseTimeToMinutes(task.scheduled_end_time || task.scheduled_start_time);
+                                                                if (endMins <= startMins) endMins = startMins + 30;
+
+                                                                setResizing({
+                                                                    id: task.id,
+                                                                    startY: e.clientY,
+                                                                    originalDurationMins: endMins - startMins,
+                                                                    originalStartMin: startMins
+                                                                });
+                                                            }}
+                                                            onPointerMove={(e) => {
+                                                                if (!resizing || resizing.id !== task.id) return;
+                                                                const deltaY = e.clientY - resizing.startY;
+                                                                const snappedDeltaMins = Math.round(deltaY / 15) * 15;
+                                                                const newDur = Math.max(15, resizing.originalDurationMins + snappedDeltaMins);
+                                                                
+                                                                setTasks(prev => prev.map(t => {
+                                                                    if (t.id !== task.id) return t;
+                                                                    const eMin = resizing.originalStartMin + newDur;
+                                                                    const eH = Math.floor(eMin / 60);
+                                                                    const eM = Math.floor(eMin % 60);
+                                                                    return { ...t, scheduled_end_time: `${Math.min(23, eH).toString().padStart(2, '0')}:${eM.toString().padStart(2, '0')}:00` };
+                                                                }));
+                                                            }}
+                                                            onPointerUp={async (e) => {
+                                                                e.stopPropagation();
+                                                                e.target.releasePointerCapture(e.pointerId);
+                                                                if (!resizing || resizing.id !== task.id) return;
+                                                                setResizing(null);
+                                                                
+                                                                const deltaY = e.clientY - resizing.startY;
+                                                                const snappedDeltaMins = Math.round(deltaY / 15) * 15;
+                                                                const newDur = Math.max(15, resizing.originalDurationMins + snappedDeltaMins);
+                                                                const eMin = resizing.originalStartMin + newDur;
+                                                                const eH = Math.floor(eMin / 60);
+                                                                const eM = Math.floor(eMin % 60);
+                                                                const finalEndTime = `${Math.min(23, eH).toString().padStart(2, '0')}:${eM.toString().padStart(2, '0')}:00`;
+
+                                                                try { await updateScheduleTask(task.id, { scheduled_end_time: finalEndTime }); } catch(err) { console.error(err); }
+                                                            }}
+                                                        />
                                                     </div>
                                                 );
                                             })}
@@ -678,6 +771,25 @@ export default function SchedulePage() {
                     overflow: hidden;
                     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
                 }
+
+                .time-slot.drag-over {
+                    background: rgba(59, 130, 246, 0.1);
+                    border: 2px dashed var(--accent);
+                }
+
+                .resize-handle {
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 8px;
+                    cursor: ns-resize;
+                    z-index: 10;
+                }
+                .resize-handle:hover {
+                    background: rgba(0,0,0,0.1);
+                }
+
                 .mock-block .time {
                     font-size: 0.7rem;
                     opacity: 0.8;
