@@ -780,10 +780,10 @@ export default function SchedulePage() {
                     font-weight: 700;
                 }
                 .cal-cell.selected:not(.today) {
-                    background: var(--bg-tertiary);
-                    color: var(--text-primary);
+                    background: transparent;
+                    color: #ef4444;
                     font-weight: 700;
-                    box-shadow: inset 0 0 0 2px var(--accent);
+                    box-shadow: inset 0 0 0 2px #ef4444;
                 }
 
                 .schedule-main {
@@ -852,7 +852,7 @@ export default function SchedulePage() {
                     flex: 1;
                     display: flex;
                     flex-direction: column;
-                    min-width: 300px;
+                    min-width: 0;
                     border-right: 1px solid var(--border-color);
                 }
                 .timeline-day-column:last-child {

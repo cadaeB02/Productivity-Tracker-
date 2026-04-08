@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useCompany } from '@/components/CompanyContext';
-import { getNotes, addNote, updateNote, deleteNote, toggleNotePin, toggleNoteFlag } from '@/lib/store';
+import { getNotes, addNote, updateNote, deleteNote, toggleNotePin, toggleNoteFlag, addScheduleTask } from '@/lib/store';
 import { encryptContent, decryptContent, hasVaultPassword, setVaultPasswordHash, verifyVaultPassword } from '@/lib/vault';
+import { useRouter } from 'next/navigation';
 
 const CATEGORIES = [
     { key: 'inbox', label: 'Inbox', icon: 'inbox' },
@@ -30,6 +31,7 @@ function timeAgo(dateStr) {
 
 export default function NotesPage() {
     const { activeCompanyId, activeCompany } = useCompany();
+    const router = useRouter();
     const [notes, setNotes] = useState([]);
     const [activeTab, setActiveTab] = useState('inbox');
     const [loading, setLoading] = useState(true);
@@ -217,6 +219,17 @@ export default function NotesPage() {
             loadCounts();
         } catch (err) {
             console.error('Failed to move note', err);
+        }
+    };
+
+    const handleScheduleNote = async (note) => {
+        try {
+            const title = note.title || note.content.split('\n')[0].slice(0, 80) || 'To-Do Task';
+            await addScheduleTask(title, 'unknown', note.content || '');
+            router.push('/schedule');
+        } catch (err) {
+            console.error('Failed to schedule note', err);
+            alert('Failed to create schedule task');
         }
     };
 
@@ -437,6 +450,11 @@ export default function NotesPage() {
                                                     <option key={c.key} value={c.key}>{c.label}</option>
                                                 ))}
                                             </select>
+                                        )}
+                                        {activeTab === 'todo' && (
+                                            <button className="btn-icon" onClick={() => handleScheduleNote(note)} title="Send to Schedule">
+                                                <Icon name="calendar" size={14} />
+                                            </button>
                                         )}
                                         <button className="btn-icon" onClick={() => handleEdit(note)} title="Edit">
                                             <Icon name="edit" size={14} />
