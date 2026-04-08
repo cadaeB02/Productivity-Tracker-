@@ -913,7 +913,7 @@ export default function DashboardPage() {
         } catch (err) { console.error('Assign company error:', err); }
     };
 
-    // Edit mode — push widget picker to sidebar
+    // Edit mode - push widget picker to sidebar
     const enterEditMode = () => {
         setEditWidgetIds([...widgetIds]);
         setEditing(true);

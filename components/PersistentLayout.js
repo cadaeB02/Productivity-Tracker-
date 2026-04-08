@@ -13,12 +13,12 @@ export default function PersistentLayout({ children }) {
 
     const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
-    // Public pages — no sidebar, no tab bar
+    // Public pages - no sidebar, no tab bar
     if (isPublicRoute) {
         return <>{children}</>;
     }
 
-    // Auth loading — show sidebar + spinner (sidebar stays mounted)
+    // Auth loading - show sidebar + spinner (sidebar stays mounted)
     if (loading) {
         return (
             <div className="app-layout">
@@ -33,7 +33,7 @@ export default function PersistentLayout({ children }) {
         );
     }
 
-    // Not logged in — redirect
+    // Not logged in - redirect
     if (!user) {
         if (typeof window !== 'undefined') {
             window.location.href = '/login';
@@ -41,7 +41,7 @@ export default function PersistentLayout({ children }) {
         return null;
     }
 
-    // Authenticated — sidebar (desktop) + tab bar (mobile)
+    // Authenticated - sidebar (desktop) + tab bar (mobile)
     return (
         <div className="app-layout">
             <Sidebar />

@@ -170,7 +170,7 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
                             <div className="detail-row">
                                 <span className="detail-label">Time</span>
                                 <span className="detail-value">
-                                    {formatTime(session.start_time)} — {session.end_time ? formatTime(session.end_time) : 'In Progress'}
+                                    {formatTime(session.start_time)} - {session.end_time ? formatTime(session.end_time) : 'In Progress'}
                                 </span>
                             </div>
                             <div className="detail-row">
@@ -214,7 +214,7 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
                                         value={editFields.company_id}
                                         onChange={(e) => handleCompanyChange(e.target.value)}
                                     >
-                                        <option value="">—</option>
+                                        <option value="">-</option>
                                         {companies.map(c => (
                                             <option key={c.id} value={c.id}>{c.name}</option>
                                         ))}
@@ -227,7 +227,7 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
                                         value={editFields.project_id}
                                         onChange={(e) => handleProjectChange(e.target.value)}
                                     >
-                                        <option value="">—</option>
+                                        <option value="">-</option>
                                         {projects.map(p => (
                                             <option key={p.id} value={p.id}>{p.name}</option>
                                         ))}
@@ -240,7 +240,7 @@ export default function SessionDetailModal({ session, onClose, onSaved }) {
                                         value={editFields.task_id}
                                         onChange={(e) => setEditFields(p => ({ ...p, task_id: e.target.value }))}
                                     >
-                                        <option value="">—</option>
+                                        <option value="">-</option>
                                         {tasks.map(t => (
                                             <option key={t.id} value={t.id}>{t.name}</option>
                                         ))}

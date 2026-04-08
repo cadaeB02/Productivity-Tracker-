@@ -113,7 +113,7 @@ export default function LoginPage() {
                 return;
             }
 
-            // Success — redirect to home
+            // Success - redirect to home
             window.location.href = '/';
         } catch (err) {
             setError('Connection failed: ' + err.message);

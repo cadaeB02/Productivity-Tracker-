@@ -19,7 +19,7 @@ function verifyServerKey(request) {
     return null;
 }
 
-// GET /api/openclaw/tasks — returns today's tasks with session info
+// GET /api/openclaw/tasks - returns today's tasks with session info
 export async function GET(request) {
     const authError = verifyServerKey(request);
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });
@@ -77,7 +77,7 @@ export async function GET(request) {
     }
 }
 
-// POST /api/openclaw/tasks — create a new task
+// POST /api/openclaw/tasks - create a new task
 export async function POST(request) {
     const authError = verifyServerKey(request);
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });

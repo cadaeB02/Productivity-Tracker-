@@ -107,7 +107,7 @@ export async function GET(request) {
     }
 }
 
-// POST /api/agent-schedule — create/update schedule entries
+// POST /api/agent-schedule - create/update schedule entries
 export async function POST(request) {
     try {
         const settings = await authenticateAgent(request);

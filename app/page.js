@@ -75,7 +75,7 @@ export default function TimerPage() {
         loadData();
     }, [loadData]);
 
-    // Timer interval — ticks all non-paused sessions
+    // Timer interval - ticks all non-paused sessions
     useEffect(() => {
         if (activeSessions.length > 0) {
             timerRef.current = setInterval(() => {
@@ -169,7 +169,7 @@ export default function TimerPage() {
     const handleUpdateStartTime = async (session, newTimeStr) => {
         try {
             if (!newTimeStr) return;
-            // Build a local Date from just HH:MM — keep today's date
+            // Build a local Date from just HH:MM - keep today's date
             const [hours, minutes] = newTimeStr.split(':').map(Number);
             const newStart = new Date();
             newStart.setHours(hours, minutes, 0, 0);
@@ -388,7 +388,7 @@ export default function TimerPage() {
                 </div>
             )}
 
-            {/* Task Switcher — Tile Grid */}
+            {/* Task Switcher - Tile Grid */}
             <div className="task-switcher">
                 <h3><Icon name="grid" size={16} className="icon-inline" /> Quick Switch</h3>
 
@@ -434,7 +434,7 @@ export default function TimerPage() {
                                         </div>
                                     </div>
 
-                                    {/* Expanded body — projects & tasks */}
+                                    {/* Expanded body - projects & tasks */}
                                     {isExpanded && (
                                         <div className="tile-body">
                                             {company.projects.map((project) => (
@@ -466,7 +466,7 @@ export default function TimerPage() {
                                                     })}
                                                     {project.tasks.length === 0 && (
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '4px 0 4px 12px', fontStyle: 'italic' }}>
-                                                            No tasks — add some in Projects
+                                                            No tasks - add some in Projects
                                                         </div>
                                                     )}
                                                 </div>

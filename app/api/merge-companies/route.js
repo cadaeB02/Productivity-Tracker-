@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// POST /api/merge-companies — merge child companies into a parent
+// POST /api/merge-companies - merge child companies into a parent
 // Moves all projects, tasks, sessions, transactions, and notes from children to parent
 // Then deletes the empty child companies
 export async function POST(request) {

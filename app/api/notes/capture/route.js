@@ -10,7 +10,7 @@ function getAdminClient() {
     });
 }
 
-// POST /api/notes/capture — fast capture from iOS Shortcut or OpenClaw
+// POST /api/notes/capture - fast capture from iOS Shortcut or OpenClaw
 // Accepts: { text, category?, company_id?, title? }
 // Auth: OpenClaw server key OR agent token
 export async function POST(request) {
@@ -40,7 +40,7 @@ export async function POST(request) {
         // SECURITY: Never allow capturing into passwords category via API
         const safeCategory = category && category !== 'passwords' ? category : 'inbox';
 
-        // Get user_id — for single-user app, get the first user from companies
+        // Get user_id - for single-user app, get the first user from companies
         const { data: firstCompany } = await admin
             .from('companies')
             .select('user_id')

@@ -265,7 +265,7 @@ export default function TreasuryPage() {
             if (!res.ok) throw new Error(json.error || 'Analysis failed');
             const dataArr = Array.isArray(json.data) ? json.data : [json.data];
             setScannedItems(dataArr.map((item, idx) => ({ ...item, _id: Date.now() + idx, _selected: true, company_id: activeCompanyId || '' })));
-            setEditorMessages([{ role: 'assistant', content: `${dataArr.length} items ready for review. Tell me what to change — for example:\n• "Item #3 is recurring"\n• "Change items 5-8 to Travel"\n• "Delete item #2"` }]);
+            setEditorMessages([{ role: 'assistant', content: `${dataArr.length} items ready for review. Tell me what to change - for example:\n• "Item #3 is recurring"\n• "Change items 5-8 to Travel"\n• "Delete item #2"` }]);
         } catch (err) {
             setScanError(err.message || 'Failed to analyze document');
         }
@@ -320,7 +320,7 @@ export default function TreasuryPage() {
                 const txn = await addTransaction({
                     type: item.type === 'revenue' ? 'revenue' : 'expense',
                     amount: parseFloat(item.amount) || 0,
-                    description: `${item.vendor || ''} — ${item.description || ''}`.trim(),
+                    description: `${item.vendor || ''} - ${item.description || ''}`.trim(),
                     category: item.category || 'Other',
                     company_id: item.company_id || activeCompanyId,
                     date: item.date || new Date().toISOString().split('T')[0],
@@ -340,7 +340,7 @@ export default function TreasuryPage() {
                             file: receiptFile,
                             company_id: txn.company_id,
                             category: 'receipt',
-                            description: `${txn.description} — ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(txn.amount)}`,
+                            description: `${txn.description} - ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(txn.amount)}`,
                             linked_type: 'transaction',
                             linked_id: txn.id,
                         });
@@ -400,7 +400,7 @@ export default function TreasuryPage() {
                 setEditorMessages(prev => [...prev, { role: 'assistant', content: result.error || 'Something went wrong.' }]);
             }
         } catch {
-            setEditorMessages(prev => [...prev, { role: 'assistant', content: 'Connection error — please try again.' }]);
+            setEditorMessages(prev => [...prev, { role: 'assistant', content: 'Connection error - please try again.' }]);
         }
         setEditorSending(false);
     };
@@ -414,7 +414,7 @@ export default function TreasuryPage() {
     const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
     const netIncome = totalRevenue - totalExpenses;
 
-    // ROFT calculation — Return on Founder Time
+    // ROFT calculation - Return on Founder Time
     const totalSessionSeconds = sessions.reduce((s, sess) => s + (sess.duration || 0), 0);
     const totalHours = totalSessionSeconds / 3600;
     const roft = totalHours > 0 ? totalRevenue / totalHours : 0;
@@ -439,7 +439,7 @@ export default function TreasuryPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <span className="color-dot" style={{ backgroundColor: activeCompany.color, width: '12px', height: '12px', borderRadius: '50%' }} />
                         <div>
-                            <h2>{activeCompany.name} — Treasury</h2>
+                            <h2>{activeCompany.name} - Treasury</h2>
                             <p>Revenue, expenses, and cash flow</p>
                         </div>
                     </div>
@@ -464,7 +464,7 @@ export default function TreasuryPage() {
                     <div className="stat-card roft-card">
                         <div className="stat-label"><Icon name="timer" size={12} className="icon-inline" /> ROFT</div>
                         <div className="stat-value" style={{ color: 'var(--color-accent)' }}>
-                            {totalHours > 0 ? `${formatCurrency(roft)}/hr` : '—'}
+                            {totalHours > 0 ? `${formatCurrency(roft)}/hr` : '-'}
                         </div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                             {totalHours > 0 ? `${Math.round(totalHours * 10) / 10}h tracked` : 'No hours logged'}
@@ -517,7 +517,7 @@ export default function TreasuryPage() {
                                         {acct.name} {acct.mask && <span style={{ color: 'var(--text-muted)' }}>••••{acct.mask}</span>}
                                     </div>
                                     <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-accent)' }}>
-                                        {acct.current_balance != null ? formatCurrency(acct.current_balance) : '—'}
+                                        {acct.current_balance != null ? formatCurrency(acct.current_balance) : '-'}
                                     </div>
                                     {acct.available_balance != null && acct.available_balance !== acct.current_balance && (
                                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
@@ -1024,7 +1024,7 @@ export default function TreasuryPage() {
                                     {acct.name} {acct.mask && <span style={{ color: 'var(--text-muted)' }}>••••{acct.mask}</span>}
                                 </div>
                                 <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-accent)' }}>
-                                    {acct.current_balance != null ? formatCurrency(acct.current_balance) : '—'}
+                                    {acct.current_balance != null ? formatCurrency(acct.current_balance) : '-'}
                                 </div>
                             </div>
                         ))}

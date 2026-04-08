@@ -243,7 +243,7 @@ export default function NotesPage() {
                         <span className="color-dot" style={{ backgroundColor: activeCompany.color, width: '12px', height: '12px', borderRadius: '50%' }} />
                     )}
                     <div>
-                        <h2>{activeCompany ? `${activeCompany.name} — Notes` : 'Notes'}</h2>
+                        <h2>{activeCompany ? `${activeCompany.name} - Notes` : 'Notes'}</h2>
                         <p>Capture, organize, and secure your information</p>
                     </div>
                 </div>

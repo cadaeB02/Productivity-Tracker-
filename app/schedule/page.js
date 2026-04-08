@@ -226,7 +226,7 @@ export default function SchedulePage() {
                                     </div>
                                 ))}
                                 {tasks.filter(t => !t.scheduled_date && t.status !== 'done').length === 0 && (
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>Inbox zero! ✨</div>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>Inbox zero.</div>
                                 )}
                             </div>
                         </div>

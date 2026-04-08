@@ -429,7 +429,7 @@ export default function FilingPage() {
                         <span className="color-dot" style={{ backgroundColor: activeCompany.color, width: '12px', height: '12px', borderRadius: '50%' }} />
                     )}
                     <div>
-                        <h2>{activeCompany ? `${activeCompany.name} — Filing` : 'Filing Cabinet'}</h2>
+                        <h2>{activeCompany ? `${activeCompany.name} - Filing` : 'Filing Cabinet'}</h2>
                         <p>Documents, agreements, and records</p>
                     </div>
                 </div>
@@ -636,7 +636,7 @@ export default function FilingPage() {
                         <div className="empty-state">
                             <div className="empty-state-icon"><Icon name="grid" size={48} /></div>
                             <h3>No vendors yet</h3>
-                            <p>Add your tech stack — tools, platforms, and services you use.</p>
+                            <p>Add your tech stack - tools, platforms, and services you use.</p>
                         </div>
                     ) : (() => {
                         // Pipeline flow order
@@ -707,7 +707,7 @@ export default function FilingPage() {
                                                     </span>
                                                 </div>
 
-                                                {/* Vendor boxes — width proportional to activity */}
+                                                {/* Vendor boxes - width proportional to activity */}
                                                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'stretch' }}>
                                                     {layer.vendors.map((vendor) => {
                                                         const activity = getActivity(vendor);
@@ -954,7 +954,7 @@ export default function FilingPage() {
                                                 await addTransaction({
                                                     type: 'expense',
                                                     amount,
-                                                    description: `${selectedVendor.name} — ${descEl?.value || 'Expense'}`,
+                                                    description: `${selectedVendor.name} - ${descEl?.value || 'Expense'}`,
                                                     category: catEl?.value || 'Software',
                                                     company_id: selectedVendor.company_id || activeCompanyId,
                                                     date: dateEl?.value || new Date().toISOString().split('T')[0],

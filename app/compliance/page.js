@@ -301,7 +301,7 @@ export default function CompliancePage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <span className="color-dot" style={{ backgroundColor: activeCompany.color, width: '12px', height: '12px', borderRadius: '50%' }} />
                         <div>
-                            <h2>{activeCompany.name} — Compliance</h2>
+                            <h2>{activeCompany.name} - Compliance</h2>
                             <p>Entity settings and compliance tracking</p>
                         </div>
                     </div>
@@ -800,8 +800,8 @@ export default function CompliancePage() {
                                                 </div>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                                                     {new Date(t.transferred_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                    {t.notes && ` — ${t.notes}`}
-                                                    {t.agreement_doc_id && ' — Agreement attached'}
+                                                    {t.notes && ` - ${t.notes}`}
+                                                    {t.agreement_doc_id && ' - Agreement attached'}
                                                 </div>
                                             </div>
                                             <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{t.percentage}%</span>
@@ -949,7 +949,7 @@ export default function CompliancePage() {
                                 </div>
                                 <div className="compliance-card-body">
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                                        Not a registered entity — click below to set up as an LLC.
+                                        Not a registered entity - click below to set up as an LLC.
                                     </div>
                                     <button
                                         className="btn"

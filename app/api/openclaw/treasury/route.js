@@ -19,7 +19,7 @@ function verifyServerKey(request) {
     return null;
 }
 
-// GET /api/openclaw/treasury — returns financial summaries per company
+// GET /api/openclaw/treasury - returns financial summaries per company
 export async function GET(request) {
     const authError = verifyServerKey(request);
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });

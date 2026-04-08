@@ -1001,7 +1001,7 @@ export default function SettingsPage() {
                 <div className="card">
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                         Connect your bank accounts to automatically sync transactions into Treasury.
-                        Powered by Plaid — your credentials are never stored on our servers.
+                        Powered by Plaid - your credentials are never stored on our servers.
                     </p>
 
                     {plaidError && (
@@ -1058,7 +1058,7 @@ export default function SettingsPage() {
                                             {acct.name} {acct.mask && <span style={{ color: 'var(--text-muted)' }}>••••{acct.mask}</span>}
                                         </div>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-                                            {acct.type} — {acct.subtype}
+                                            {acct.type} - {acct.subtype}
                                             {acct.current_balance != null && ` • $${parseFloat(acct.current_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
                                         </div>
                                     </div>
@@ -1096,7 +1096,7 @@ export default function SettingsPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <div style={{ fontWeight: 700, fontSize: '1rem' }}>HoldCo OS</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v8.0.0 — Productivity Tracker + Treasury</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>v8.0.0 - Productivity Tracker + Treasury</div>
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             Built with Next.js + Supabase + Gemini AI + Plaid

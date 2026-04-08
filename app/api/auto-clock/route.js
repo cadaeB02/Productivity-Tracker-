@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 // Auto-clock endpoint: called by cron or external trigger to auto-start sessions
-// POST /api/auto-clock — checks rules and starts sessions if conditions match
+// POST /api/auto-clock - checks rules and starts sessions if conditions match
 export async function POST(request) {
     try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -114,7 +114,7 @@ export async function POST(request) {
     }
 }
 
-// GET /api/auto-clock — check status of auto-clock rules
+// GET /api/auto-clock - check status of auto-clock rules
 export async function GET(request) {
     try {
         const authHeader = request.headers.get('authorization');

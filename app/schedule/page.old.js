@@ -412,7 +412,7 @@ export default function SchedulePage() {
         return `SCHEDULE BLOCKS:\n${blocksSummary || 'None'}\n\nPENDING TASKS:\n${tasksSummary || 'None'}\n\nAUTO-CLOCK RULES:\n${ruleSummary || 'None'}\n\nCALENDAR EVENTS:\n${calSummary || 'None synced'}\n\nCurrent date: ${today.toLocaleDateString()}\nCurrent month view: ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
     };
 
-    // Timeline rendering — compact strip + session list
+    // Timeline rendering - compact strip + session list
     const selectedDayBlocks = getSelectedDayBlocks();
     const selectedDateStr = selectedDate
         ? `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`
@@ -425,7 +425,7 @@ export default function SchedulePage() {
     const isToday2 = selectedDateStr === todayStr;
     const isFuture = selectedDateStr && selectedDateStr > todayStr;
 
-    // Build timeline items — merge only CONSECUTIVE sessions of the same task
+    // Build timeline items - merge only CONSECUTIVE sessions of the same task
     const buildTimelineItems = () => {
         const timelineBlocks = []; // for the compact strip
         const listItems = [];     // for the session list
@@ -452,7 +452,7 @@ export default function SchedulePage() {
             }
         }
 
-        // 2. Actual sessions — merge consecutive only (within 5 min gap)
+        // 2. Actual sessions - merge consecutive only (within 5 min gap)
         if (isPast || isToday2) {
             // Sort sessions by start time
             const sorted = [...daySessions].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
@@ -474,7 +474,7 @@ export default function SchedulePage() {
                 // Check if this session can merge with the last merged block
                 const last = merged.length > 0 ? merged[merged.length - 1] : null;
                 if (last && last.taskName === taskName && last.color === color && startMins <= last.endMins + 5) {
-                    // Merge — extend the block
+                    // Merge - extend the block
                     last.endMins = Math.max(last.endMins, endMins);
                     last.sessions.push(session);
                 } else {

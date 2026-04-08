@@ -18,7 +18,7 @@ export function CompanyProvider({ children }) {
             c.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
             setCompanies(c);
         } catch (err) {
-            // Not authenticated yet — ignore
+            // Not authenticated yet - ignore
         }
         setLoaded(true);
     }, []);
@@ -50,21 +50,21 @@ export function CompanyProvider({ children }) {
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // Cmd+K — toggle quick switcher
+            // Cmd+K - toggle quick switcher
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                 e.preventDefault();
                 setShowSwitcher((prev) => !prev);
                 return;
             }
 
-            // Cmd+0 — Global view
+            // Cmd+0 - Global view
             if ((e.metaKey || e.ctrlKey) && e.key === '0') {
                 e.preventDefault();
                 setActiveCompanyId(null);
                 return;
             }
 
-            // Cmd+1-9 — switch to company by index
+            // Cmd+1-9 - switch to company by index
             if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
                 e.preventDefault();
                 const index = parseInt(e.key) - 1;

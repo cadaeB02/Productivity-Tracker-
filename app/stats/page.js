@@ -8,7 +8,7 @@ import { useCompany } from '@/components/CompanyContext';
 import { getStats, getCompanies, getPayEstimate, syncPayPeriodToTreasury } from '@/lib/store';
 import { formatDurationShort, formatTime } from '@/lib/utils';
 
-// Rich tooltip component — appears instantly on hover
+// Rich tooltip component - appears instantly on hover
 function BarTooltip({ data, position }) {
     if (!data) return null;
 
@@ -127,7 +127,7 @@ export default function StatsPage() {
         const earliest = sorted[0];
         const latest = sorted[sorted.length - 1];
         const timeRange = earliest && latest?.end_time
-            ? `${formatTime(earliest.start_time)} — ${formatTime(latest.end_time)}`
+            ? `${formatTime(earliest.start_time)} - ${formatTime(latest.end_time)}`
             : earliest ? `${formatTime(earliest.start_time)}` : null;
 
         // Task breakdown
@@ -141,7 +141,7 @@ export default function StatsPage() {
             .map(([name, duration]) => ({ name, duration }))
             .sort((a, b) => b.duration - a.duration);
 
-        // Summary — use the first AI summary or user summary we find
+        // Summary - use the first AI summary or user summary we find
         const summarySession = daySessions.find(s => s.ai_summary) || daySessions.find(s => s.summary);
         const summary = summarySession?.ai_summary || summarySession?.summary || null;
         const truncatedSummary = summary && summary.length > 100 ? summary.slice(0, 100) + '...' : summary;
@@ -406,7 +406,7 @@ export default function StatsPage() {
                 )}
             </div>
 
-            {/* Day of Week Distribution — STACKED */}
+            {/* Day of Week Distribution - STACKED */}
             <div className="card" style={{ marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '20px' }}>By Day of Week</h3>
                 <div className="bar-chart">
@@ -494,7 +494,7 @@ export default function StatsPage() {
                         <div>
                             <div style={{ fontWeight: 600 }}>{longestSession.tasks?.name || 'Unknown'}</div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                {longestSession.companies?.name} — {new Date(longestSession.start_time).toLocaleDateString()}
+                                {longestSession.companies?.name} - {new Date(longestSession.start_time).toLocaleDateString()}
                             </div>
                         </div>
                         <div style={{ marginLeft: 'auto', fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: '1.1rem', color: 'var(--text-accent)' }}>

@@ -80,7 +80,7 @@ export async function GET(request) {
                         lines.push(`DTEND;TZID=America/Denver:${dtEnd}`);
                         lines.push(`SUMMARY:${escapeIcal(block.label)}`);
                         if (block.companies?.name) {
-                            lines.push(`DESCRIPTION:${escapeIcal(block.companies.name)} — ${escapeIcal(block.block_type || 'planned')}`);
+                            lines.push(`DESCRIPTION:${escapeIcal(block.companies.name)} - ${escapeIcal(block.block_type || 'planned')}`);
                         }
                         lines.push(`CATEGORIES:${escapeIcal(block.block_type || 'planned')}`);
                         lines.push('END:VEVENT');
@@ -99,7 +99,7 @@ export async function GET(request) {
                 lines.push(`DTEND;TZID=America/Denver:${dtEnd}`);
                 lines.push(`SUMMARY:${escapeIcal(block.label)}`);
                 if (block.companies?.name) {
-                    lines.push(`DESCRIPTION:${escapeIcal(block.companies.name)} — ${escapeIcal(block.block_type || 'planned')}`);
+                    lines.push(`DESCRIPTION:${escapeIcal(block.companies.name)} - ${escapeIcal(block.block_type || 'planned')}`);
                 }
                 lines.push(`CATEGORIES:${escapeIcal(block.block_type || 'planned')}`);
                 lines.push('END:VEVENT');

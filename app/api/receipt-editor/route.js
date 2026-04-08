@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-const SYSTEM_PROMPT = `You are the Receipt Editor — an AI assistant embedded in the HoldCo OS Treasury Receipt Scanner. The user has just scanned a document and the AI extracted a batch of line items. Your job is to help the user refine, edit, and correct these items using natural language BEFORE they are saved to the database.
+const SYSTEM_PROMPT = `You are the Receipt Editor - an AI assistant embedded in the HoldCo OS Treasury Receipt Scanner. The user has just scanned a document and the AI extracted a batch of line items. Your job is to help the user refine, edit, and correct these items using natural language BEFORE they are saved to the database.
 
 ## Context
 You will receive the current list of parsed items as a numbered array. Each item has these fields:
@@ -131,7 +131,7 @@ export async function POST(request) {
         const errMsg = lastError?.message || '';
         const isCapacity = errMsg.includes('503') || errMsg.includes('429') || errMsg.includes('high demand');
         const friendlyMsg = isCapacity
-            ? 'AI model is busy right now — please try again in a moment.'
+            ? 'AI model is busy right now - please try again in a moment.'
             : 'Failed to process your request. Please try again.';
         
         console.error('Receipt editor error after retries:', lastError);

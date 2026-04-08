@@ -82,14 +82,14 @@ function formatTimeDisplay(dateObj) {
     if (!dateObj) return null;
     
     if (!dateObj.isUTC) {
-        // Already in local time — just format it
+        // Already in local time - just format it
         const [h, m] = dateObj.localTime.split(':').map(Number);
         const ampm = h >= 12 ? 'PM' : 'AM';
         const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
         return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
     }
     
-    // UTC time — convert to Mountain Time
+    // UTC time - convert to Mountain Time
     const d = new Date(dateObj.iso);
     return d.toLocaleTimeString('en-US', { 
         hour: 'numeric', 
@@ -117,7 +117,7 @@ function getDuration(startObj, endObj) {
     if (!startObj || !endObj) return null;
     
     if (!startObj.isUTC && !endObj.isUTC) {
-        // Both are local times — calculate from local time strings
+        // Both are local times - calculate from local time strings
         const [sh, sm] = startObj.localTime.split(':').map(Number);
         const [eh, em] = endObj.localTime.split(':').map(Number);
         let startMins = sh * 60 + sm;
@@ -126,7 +126,7 @@ function getDuration(startObj, endObj) {
         return Math.round((endMins - startMins) / 60 * 100) / 100;
     }
     
-    // At least one is UTC — use ISO dates
+    // At least one is UTC - use ISO dates
     const start = new Date(startObj.iso);
     const end = new Date(endObj.iso);
     return Math.round((end - start) / 3600000 * 100) / 100;

@@ -19,7 +19,7 @@ function verifyServerKey(request) {
     return null;
 }
 
-// POST /api/openclaw/expenses — add a transaction (expense or revenue)
+// POST /api/openclaw/expenses - add a transaction (expense or revenue)
 export async function POST(request) {
     const authError = verifyServerKey(request);
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });

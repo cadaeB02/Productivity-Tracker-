@@ -41,7 +41,7 @@ export async function POST(request) {
             }, { onConflict: 'user_id' });
 
         if (error) {
-            // Table might not exist yet — create a lightweight response
+            // Table might not exist yet - create a lightweight response
             console.error('Calendar cache upsert error:', error);
             // Fall back to returning the events for client-side caching
             return NextResponse.json({ 

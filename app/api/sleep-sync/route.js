@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// POST /api/sleep-sync — receive sleep data from iOS Shortcut
+// POST /api/sleep-sync - receive sleep data from iOS Shortcut
 // Body options:
 // Simple: { token, date, wake_time: "06:30", sleep_time: "22:15" }
 // With phases: { token, date, wake_time, sleep_time, rem_mins, core_mins, deep_mins, awake_mins }
@@ -37,7 +37,7 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
 
-        // Parse date — use today in Mountain Time if not provided
+        // Parse date - use today in Mountain Time if not provided
         let dateStr = body.date;
         if (!dateStr) {
             const now = new Date();
@@ -47,7 +47,7 @@ export async function POST(request) {
 
         const source = body.source || 'ios_shortcut';
 
-        // Build ISO timestamps — keep times in Mountain Time context
+        // Build ISO timestamps - keep times in Mountain Time context
         let wakeISO, sleepISO;
 
         if (body.wake_iso) {

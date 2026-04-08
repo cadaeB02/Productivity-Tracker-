@@ -331,7 +331,7 @@ export default function ProjectsPage() {
                             <input className="input" type="number" step="0.01" placeholder="12" value={taxFed} onChange={(e) => setField('tax_federal_rate', e.target.value)} />
                         </div>
                         <div className="input-group">
-                            <label>State Tax (%) — CO</label>
+                            <label>State Tax (%) - CO</label>
                             <input className="input" type="number" step="0.01" placeholder="4.4" value={taxState} onChange={(e) => setField('tax_state_rate', e.target.value)} />
                         </div>
                         <div className="input-group">
@@ -613,7 +613,7 @@ export default function ProjectsPage() {
                                     </div>
                                 )}
 
-                                {/* Expanded Body — projects & tasks */}
+                                {/* Expanded Body - projects & tasks */}
                                 {isOpen && (
                                     <div className="tile-body" onClick={(e) => e.stopPropagation()}>
                                         {companyProjects.map((project) => {

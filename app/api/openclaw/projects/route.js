@@ -19,7 +19,7 @@ function verifyServerKey(request) {
     return null;
 }
 
-// POST /api/openclaw/projects — create or update a project
+// POST /api/openclaw/projects - create or update a project
 export async function POST(request) {
     const authError = verifyServerKey(request);
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });

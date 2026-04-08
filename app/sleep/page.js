@@ -145,13 +145,13 @@ export default function SleepPage() {
     };
 
     const formatTime = (iso) => {
-        if (!iso) return '—';
+        if (!iso) return '-';
         const d = new Date(iso);
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
     const calcDuration = (wake, sleep) => {
-        if (!wake || !sleep) return '—';
+        if (!wake || !sleep) return '-';
         const w = new Date(wake);
         const s = new Date(sleep);
         let diff;
@@ -160,7 +160,7 @@ export default function SleepPage() {
         } else {
             diff = (24 * 60) - (s - w) / 60000;
         }
-        if (diff < 0 || diff > 24 * 60) return '—';
+        if (diff < 0 || diff > 24 * 60) return '-';
         const h = Math.floor(diff / 60);
         const m = Math.round(diff % 60);
         return `${h}h ${m}m`;
@@ -237,7 +237,7 @@ export default function SleepPage() {
                             <span style={{ color: syncStatus.ok ? 'var(--color-success)' : 'var(--color-danger)' }}>
                                 {syncStatus.ok ? '✓' : '✗'}
                             </span>
-                            API Response — {syncStatus.status}
+                            API Response - {syncStatus.status}
                         </h3>
                         <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{syncStatus.timestamp}</span>
                     </div>

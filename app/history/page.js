@@ -235,7 +235,7 @@ export default function HistoryPage() {
                 Object.entries(sessionsByDate).map(([date, dateSessions]) => (
                     <div key={date} style={{ marginBottom: '24px' }}>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px', paddingLeft: '4px' }}>
-                            {date} — {formatDurationShort(dateSessions.reduce((sum, s) => sum + (s.duration || 0), 0))} total
+                            {date} - {formatDurationShort(dateSessions.reduce((sum, s) => sum + (s.duration || 0), 0))} total
                             {dateSessions.some(s => !s.end_time) && <span style={{ color: 'var(--color-success)', fontSize: '0.7rem', marginLeft: '6px' }}>(active)</span>}
                         </div>
                         <div className="session-list">
@@ -266,7 +266,7 @@ export default function HistoryPage() {
                                         <div className="session-duration"><LiveDuration session={session} /></div>
                                         <div className="session-time">
                                             {formatTime(session.start_time)}
-                                            {session.end_time && ` — ${formatTime(session.end_time)}`}
+                                            {session.end_time && ` - ${formatTime(session.end_time)}`}
                                         </div>
                                     </div>
                                     <button
