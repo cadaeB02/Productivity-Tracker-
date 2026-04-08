@@ -470,31 +470,55 @@ export default function SchedulePage() {
                                                     const sDate = s.start_time?.split('T')[0];
                                                     return sDate === iso;
                                                 });
+                                                // Assign overlap columns
+                                                const columns = [];
+                                                daySessions.forEach((session, si) => {
+                                                    const sStart = new Date(session.start_time);
+                                                    const sEnd = session.end_time ? new Date(session.end_time) : new Date();
+                                                    let col = 0;
+                                                    for (let c = 0; c < columns.length; c++) {
+                                                        const hasConflict = columns[c].some(idx => {
+                                                            const other = daySessions[idx];
+                                                            const oStart = new Date(other.start_time);
+                                                            const oEnd = other.end_time ? new Date(other.end_time) : new Date();
+                                                            return sStart < oEnd && sEnd > oStart;
+                                                        });
+                                                        if (!hasConflict) { col = c; columns[c].push(si); return; }
+                                                    }
+                                                    col = columns.length;
+                                                    columns.push([si]);
+                                                });
+                                                const totalCols = Math.max(1, columns.length);
+
                                                 return daySessions.map((session, si) => {
                                                     const startLocal = new Date(session.start_time);
                                                     const endLocal = session.end_time ? new Date(session.end_time) : new Date();
                                                     const sTimeStr = `${startLocal.getHours().toString().padStart(2,'0')}:${startLocal.getMinutes().toString().padStart(2,'0')}`;
                                                     const eTimeStr = `${endLocal.getHours().toString().padStart(2,'0')}:${endLocal.getMinutes().toString().padStart(2,'0')}`;
-                                                    const startMin = parseTimeToMinutes(sTimeStr);
-                                                    const topPx = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+                                                    const style = getBlockStyle(sTimeStr, eTimeStr);
                                                     const color = session.companies?.color || '#94a3b8';
-                                                    // Stack horizontally: each session pill offsets by 50% of remaining width
-                                                    const overlaps = daySessions.filter((s2, s2i) => {
-                                                        if (s2i === si) return false;
-                                                        const s2Start = new Date(s2.start_time);
-                                                        const s2End = s2.end_time ? new Date(s2.end_time) : new Date();
-                                                        return startLocal < s2End && endLocal > s2Start;
-                                                    }).length;
-                                                    const leftOffset = overlaps > 0 ? si * 30 : 0;
+                                                    const isActive = !session.end_time;
+                                                    // Find which column this session is in
+                                                    let myCol = 0;
+                                                    columns.forEach((col, ci) => { if (col.includes(si)) myCol = ci; });
+                                                    const colWidth = `calc((100% - 70px) / ${totalCols})`;
+                                                    const colLeft = `calc(70px + ${myCol} * ((100% - 70px) / ${totalCols}))`;
+
                                                     return (
                                                         <div key={session.id} className="session-pill" style={{
-                                                            top: `${topPx}px`,
-                                                            left: `${70 + leftOffset}px`,
-                                                            backgroundColor: `${color}30`,
+                                                            ...style,
+                                                            height: style.height,
+                                                            left: colLeft,
+                                                            width: colWidth,
+                                                            backgroundColor: `${color}15`,
                                                             borderLeft: `3px solid ${color}`,
                                                             color: color,
+                                                            borderRadius: '6px',
+                                                            maxWidth: 'none',
                                                         }}>
-                                                            {session.companies?.name?.split(' ')[0] || 'Work'}
+                                                            <span style={{ fontSize: '0.65rem', fontWeight: 600, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {session.companies?.name?.split(' ')[0] || 'Work'}{isActive ? ' (live)' : ''}
+                                                            </span>
                                                         </div>
                                                     );
                                                 });
