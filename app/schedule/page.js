@@ -1,1252 +1,464 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/components/AuthProvider';
-import {
-    getScheduleBlocks,
-    addScheduleBlock,
-    deleteScheduleBlock,
-    addScheduleException,
-    getExceptions,
-    getScheduleTasks,
-    addScheduleTask,
-    updateScheduleTask,
-    deleteScheduleTask,
-    scheduleTask,
-    getSessionsForDate,
-    getSessionsForMonth,
-    getSleepLog,
-    getSleepLogs,
-    upsertSleepLog,
-    importSleepLogs,
-    getCompanies,
-    getAutoClockRules,
-    addManualSession,
-} from '@/lib/store';
-import { chatWithAgent, hasApiKey } from '@/lib/gemini';
-import { formatTime } from '@/lib/utils';
-
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
-
-const DURATION_OPTIONS = [
-    { value: 'short', label: 'Short', color: '#22c55e' },
-    { value: 'medium', label: 'Med', color: '#f59e0b' },
-    { value: 'long', label: 'Long', color: '#ef4444' },
-    { value: 'unknown', label: '?', color: '#6366f1' },
-];
-
-// Duration estimate → approximate minutes for AI scheduling
-const DURATION_MINUTES = { short: 30, medium: 60, long: 120, unknown: 45 };
-
-function parseTimeToMinutes(timeStr) {
-    if (!timeStr) return 0;
-    const [h, m] = timeStr.split(':').map(Number);
-    return h * 60 + (m || 0);
-}
-
-function minutesToTime(mins) {
-    const h = Math.floor(mins / 60) % 24;
-    const m = mins % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-function formatHour(hour) {
-    if (hour === 0) return '12am';
-    if (hour < 12) return `${hour}am`;
-    if (hour === 12) return '12pm';
-    return `${hour - 12}pm`;
-}
 
 export default function SchedulePage() {
-    const today = new Date();
     const { user } = useAuth();
-    const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1);
-    const [currentYear, setCurrentYear] = useState(today.getFullYear());
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [blocks, setBlocks] = useState([]);
-    const [exceptions, setExceptions] = useState([]);
-    const [tasks, setTasks] = useState([]);
-    const [daySessions, setDaySessions] = useState([]);
-    const [monthSessions, setMonthSessions] = useState([]);
-    const [sleepLog, setSleepLog] = useState(null);
-    const [sleepLogs, setSleepLogs] = useState([]);
-    const [companies, setCompanies] = useState([]);
-    const [autoClockRules, setAutoClockRules] = useState([]);
-    const [loading, setLoading] = useState(true);
+    
+    // Core Layout State
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [viewMode, setViewMode] = useState('today'); // 'inbox', 'today', 'upcoming'
+    const [horizonDays, setHorizonDays] = useState(1); // 1, 3, 5, 7
 
-    // Task notepad states
-    const [newTaskTitle, setNewTaskTitle] = useState('');
-    const [newTaskDuration, setNewTaskDuration] = useState('medium');
+    // Current Date Context
+    const today = new Date();
+    const [currentDate, setCurrentDate] = useState(today);
 
-    // Add block states
-    const [showAddBlock, setShowAddBlock] = useState(false);
-    const [blockLabel, setBlockLabel] = useState('');
-    const [blockStart, setBlockStart] = useState('09:00');
-    const [blockEnd, setBlockEnd] = useState('17:00');
-    const [blockType, setBlockType] = useState('planned');
-    const [blockRecurring, setBlockRecurring] = useState(false);
-    const [blockDays, setBlockDays] = useState([]);
-    const [blockColor, setBlockColor] = useState('#6366f1');
-
-    // Sleep input
-    const [showSleepInput, setShowSleepInput] = useState(false);
-    const [wakeTimeInput, setWakeTimeInput] = useState('06:00');
-    const [sleepTimeInput, setSleepTimeInput] = useState('22:00');
-
-    // AI chat
-    const [aiMessage, setAiMessage] = useState('');
-    const [aiResponse, setAiResponse] = useState('');
-    const [aiLoading, setAiLoading] = useState(false);
-
-    // Apple Health import
-    const [showImport, setShowImport] = useState(false);
-    const fileInputRef = useRef(null);
-
-    // Timeline detail panel
-    const [expandedBlock, setExpandedBlock] = useState(null);
-    const [filterCompany, setFilterCompany] = useState('all');
-
-
-    // Apple Calendar (synced from Mac)
-    const [appleCalEvents, setAppleCalEvents] = useState(null);
-    const [appleCalLoading, setAppleCalLoading] = useState(false);
-    const [appleCalSyncedAt, setAppleCalSyncedAt] = useState(null);
-
-    const loadAppleCalendar = useCallback(async () => {
-        if (!user?.id) return;
-        setAppleCalLoading(true);
-        try {
-            const res = await fetch(`/api/apple-calendar?uid=${user.id}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.events && data.events.length > 0) {
-                    setAppleCalEvents(data.events);
-                    setAppleCalSyncedAt(data.synced_at);
-                }
-            }
-        } catch (err) {
-            console.error('Failed to load Apple Calendar', err);
-        }
-        setAppleCalLoading(false);
-    }, [user?.id]);
-
-    const timelineRef = useRef(null);
-
-    const loadMonthData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [b, exc, t, ms, sl, c, rules] = await Promise.all([
-                getScheduleBlocks(currentYear, currentMonth),
-                getExceptions(currentYear, currentMonth),
-                getScheduleTasks(),
-                getSessionsForMonth(currentYear, currentMonth),
-                getSleepLogs(currentYear, currentMonth),
-                getCompanies(),
-                getAutoClockRules(),
-            ]);
-            setBlocks(b);
-            setExceptions(exc);
-            setTasks(t);
-            setMonthSessions(ms);
-            setSleepLogs(sl);
-            setCompanies(c);
-            setAutoClockRules(rules);
-        } catch (err) {
-            console.error('Failed to load schedule data', err);
-        }
-        setLoading(false);
-    }, [currentYear, currentMonth]);
-
-    useEffect(() => {
-        loadMonthData();
-        loadAppleCalendar();
-    }, [loadMonthData, loadAppleCalendar]);
-
-    // Load day-specific data when a date is selected
-    useEffect(() => {
-        if (!selectedDate) return;
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-        Promise.all([
-            getSessionsForDate(dateStr),
-            getSleepLog(dateStr),
-        ]).then(([sessions, sleep]) => {
-            setDaySessions(sessions);
-            setSleepLog(sleep);
-            if (sleep) {
-                const wt = sleep.wake_time ? new Date(sleep.wake_time) : null;
-                const st = sleep.sleep_time ? new Date(sleep.sleep_time) : null;
-                if (wt) setWakeTimeInput(`${String(wt.getHours()).padStart(2, '0')}:${String(wt.getMinutes()).padStart(2, '0')}`);
-                if (st) setSleepTimeInput(`${String(st.getHours()).padStart(2, '0')}:${String(st.getMinutes()).padStart(2, '0')}`);
-            }
-        });
-    }, [selectedDate, currentYear, currentMonth]);
-
-    // Calendar helpers
-    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-    const firstDayOfWeek = new Date(currentYear, currentMonth - 1, 1).getDay();
-    const todayDate = today.getDate();
-    const isCurrentMonth = today.getMonth() + 1 === currentMonth && today.getFullYear() === currentYear;
-
-    const prevMonth = () => {
-        if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(y => y - 1); }
-        else setCurrentMonth(m => m - 1);
-        setSelectedDate(null);
-    };
-
-    const nextMonth = () => {
-        if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear(y => y + 1); }
-        else setCurrentMonth(m => m + 1);
-        setSelectedDate(null);
-    };
-
-    // Check if a day has activity
-    const getDayInfo = (day) => {
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayOfWeek = new Date(currentYear, currentMonth - 1, day).getDay();
-        const isException = exceptions.some(e => e.exception_date === dateStr);
-
-        // Sessions for this day
-        const sessions = monthSessions.filter(s => {
-            const d = new Date(s.start_time);
-            return d.getDate() === day;
-        });
-
-        // Blocks for this day (recurring + specific)
-        const dayBlocks = blocks.filter(b => {
-            if (b.is_exception) return false;
-            if (b.date === dateStr) return true;
-            if (b.is_recurring && b.recurring_days?.includes(dayOfWeek)) return true;
-            return false;
-        });
-
-        // Scheduled tasks for this day
-        const scheduledTasks = tasks.filter(t => t.scheduled_date === dateStr);
-
-        // Sleep log
-        const sleep = sleepLogs.find(s => s.date === dateStr);
-
-        // Company colors from sessions
-        const colors = [...new Set(sessions.map(s => s.companies?.color).filter(Boolean))];
-        const blockColors = [...new Set(dayBlocks.map(b => b.color || b.companies?.color).filter(Boolean))];
-        const allColors = [...new Set([...colors, ...blockColors])];
-
-        return {
-            hasSessions: sessions.length > 0,
-            hasBlocks: dayBlocks.length > 0,
-            hasScheduledTasks: scheduledTasks.length > 0,
-            hasSleep: !!sleep,
-            isException,
-            colors: allColors,
-            sessionCount: sessions.length,
-            blockCount: dayBlocks.length,
-        };
-    };
-
-    // Get blocks for the selected day
-    const getSelectedDayBlocks = () => {
-        if (!selectedDate) return [];
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-        const dayOfWeek = new Date(currentYear, currentMonth - 1, selectedDate).getDay();
-        const isException = exceptions.some(e => e.exception_date === dateStr);
-        if (isException) return [];
-
-        return blocks.filter(b => {
-            if (b.is_exception) return false;
-            if (b.date === dateStr) return true;
-            if (b.is_recurring && b.recurring_days?.includes(dayOfWeek)) return true;
-            return false;
-        });
-    };
-
-    // Handle adding a new block
-    const handleAddBlock = async () => {
-        if (!blockLabel.trim()) return;
-        const dateStr = selectedDate
-            ? `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`
-            : null;
-        try {
-            await addScheduleBlock({
-                date: blockRecurring ? null : dateStr,
-                start_time: blockStart,
-                end_time: blockEnd,
-                label: blockLabel.trim(),
-                color: blockColor,
-                block_type: blockType,
-                is_recurring: blockRecurring,
-                recurring_days: blockRecurring ? blockDays : [],
-            });
-            setShowAddBlock(false);
-            setBlockLabel('');
-            loadMonthData();
-        } catch (err) {
-            console.error('Failed to add block', err);
-        }
-    };
-
-    // Handle marking exception
-    const handleMarkException = async (day) => {
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        try {
-            await addScheduleException(null, dateStr);
-            loadMonthData();
-        } catch (err) {
-            console.error('Failed to mark exception', err);
-        }
-    };
-
-    // Handle adding a task
-    const handleAddTask = async () => {
-        if (!newTaskTitle.trim()) return;
-        try {
-            await addScheduleTask(newTaskTitle.trim(), newTaskDuration);
-            setNewTaskTitle('');
-            setNewTaskDuration('medium');
-            loadMonthData();
-        } catch (err) {
-            console.error('Failed to add task', err);
-        }
-    };
-
-    // Handle saving sleep log
-    const handleSaveSleep = async () => {
-        if (!selectedDate) return;
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-        try {
-            const wakeISO = new Date(`${dateStr}T${wakeTimeInput}:00`).toISOString();
-            const sleepISO = new Date(`${dateStr}T${sleepTimeInput}:00`).toISOString();
-            await upsertSleepLog(dateStr, wakeISO, sleepISO);
-            setSleepLog({ wake_time: wakeISO, sleep_time: sleepISO });
-            setShowSleepInput(false);
-            loadMonthData();
-        } catch (err) {
-            console.error('Failed to save sleep log', err);
-        }
-    };
-
-    // Apple Health XML import
-    const handleHealthImport = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        try {
-            const text = await file.text();
-            const parser = new DOMParser();
-            const xml = parser.parseFromString(text, 'text/xml');
-            const records = xml.querySelectorAll('Record[type="HKCategoryTypeIdentifierSleepAnalysis"]');
-            const sleepMap = {};
-            records.forEach(record => {
-                const start = new Date(record.getAttribute('startDate'));
-                const end = new Date(record.getAttribute('endDate'));
-                const dateKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-                if (!sleepMap[dateKey]) {
-                    sleepMap[dateKey] = { date: dateKey, sleep_time: start.toISOString(), wake_time: end.toISOString() };
-                } else {
-                    if (start < new Date(sleepMap[dateKey].sleep_time)) sleepMap[dateKey].sleep_time = start.toISOString();
-                    if (end > new Date(sleepMap[dateKey].wake_time)) sleepMap[dateKey].wake_time = end.toISOString();
-                }
-            });
-            const logs = Object.values(sleepMap);
-            if (logs.length > 0) {
-                await importSleepLogs(logs);
-                loadMonthData();
-                setShowImport(false);
-                alert(`Imported sleep data for ${logs.length} days!`);
-            } else {
-                alert('No sleep data found in the file.');
-            }
-        } catch (err) {
-            console.error('Failed to parse health data', err);
-            alert('Failed to parse the file. Make sure it\'s an Apple Health export XML.');
-        }
-    };
-
-    // AI schedule helper
-    const handleAISchedule = async (task) => {
-        if (!hasApiKey()) { setAiResponse('No Gemini API key. Add one in Settings.'); return; }
-        setAiLoading(true);
-        try {
-            const context = buildScheduleContext();
-            const msg = `I need to schedule this task: "${task.title}" (estimated: ${task.duration_estimate}). Look at my schedule and suggest the best available time slot. If the best day seems full, let me know and suggest an alternative. Be specific about day and time.`;
-            const response = await chatWithAgent(msg, context);
-            setAiResponse(response);
-        } catch (err) {
-            setAiResponse(`Error: ${err.message}`);
-        }
-        setAiLoading(false);
-    };
-
-    const handleAIChat = async () => {
-        if (!aiMessage.trim() || aiLoading) return;
-        if (!hasApiKey()) { setAiResponse('No Gemini API key. Add one in Settings.'); return; }
-        setAiLoading(true);
-        const msg = aiMessage;
-        setAiMessage('');
-        try {
-            const context = buildScheduleContext();
-            const response = await chatWithAgent(msg, context);
-            setAiResponse(response);
-        } catch (err) {
-            setAiResponse(`Error: ${err.message}`);
-        }
-        setAiLoading(false);
-    };
-
-    const buildScheduleContext = () => {
-        const blocksSummary = blocks.slice(0, 20).map(b => {
-            if (b.is_recurring) return `Recurring ${b.label}: ${b.start_time}-${b.end_time} on days ${b.recurring_days?.join(',')}`;
-            return `${b.date}: ${b.label} ${b.start_time}-${b.end_time}`;
-        }).join('\n');
-        const tasksSummary = tasks.filter(t => t.status !== 'done').map(t =>
-            `Task: "${t.title}" (${t.duration_estimate})${t.scheduled_date ? ` - scheduled ${t.scheduled_date}` : ' - unscheduled'}`
-        ).join('\n');
-        const ruleSummary = autoClockRules.map(r =>
-            `Auto-clock: ${r.companies?.name || 'Job'} on day ${r.day_of_week} at ${r.start_time}`
-        ).join('\n');
-        // Include Apple Calendar events if available
-        const calSummary = (appleCalEvents || []).slice(0, 15).map(e =>
-            `Calendar: ${e.summary} on ${e.date} from ${e.startTime} to ${e.endTime} (${e.calendar})`
-        ).join('\n') || '';
-        return `SCHEDULE BLOCKS:\n${blocksSummary || 'None'}\n\nPENDING TASKS:\n${tasksSummary || 'None'}\n\nAUTO-CLOCK RULES:\n${ruleSummary || 'None'}\n\nCALENDAR EVENTS:\n${calSummary || 'None synced'}\n\nCurrent date: ${today.toLocaleDateString()}\nCurrent month view: ${MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
-    };
-
-    // Timeline rendering — compact strip + session list
-    const selectedDayBlocks = getSelectedDayBlocks();
-    const selectedDateStr = selectedDate
-        ? `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`
-        : null;
-    const selectedDayTasks = tasks.filter(t => t.scheduled_date === selectedDateStr);
-
-    // Determine if selected date is past, today, or future
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const isPast = selectedDateStr && selectedDateStr < todayStr;
-    const isToday2 = selectedDateStr === todayStr;
-    const isFuture = selectedDateStr && selectedDateStr > todayStr;
-
-    // Build timeline items — merge only CONSECUTIVE sessions of the same task
-    const buildTimelineItems = () => {
-        const timelineBlocks = []; // for the compact strip
-        const listItems = [];     // for the session list
-
-        // 1. Sleep blocks
-        if (sleepLog) {
-            const wakeTime = sleepLog.wake_time ? new Date(sleepLog.wake_time) : null;
-            const sleepTime = sleepLog.sleep_time ? new Date(sleepLog.sleep_time) : null;
-            if (wakeTime) {
-                const wakeMins = wakeTime.getHours() * 60 + wakeTime.getMinutes();
-                if (wakeMins > 0) {
-                    const block = { id: 'sleep-am', type: 'sleep', startMins: 0, endMins: wakeMins, label: 'Sleep', color: '#1e1b4b' };
-                    timelineBlocks.push(block);
-                    listItems.push({ ...block, timeStr: `12:00 AM → ${minutesToTime(wakeMins)}`, durationMins: wakeMins, companyName: 'Sleep', sessions: [] });
-                }
-            }
-            if (sleepTime) {
-                const sleepMins = sleepTime.getHours() * 60 + sleepTime.getMinutes();
-                if (sleepMins > 0) {
-                    const block = { id: 'sleep-pm', type: 'sleep', startMins: sleepMins, endMins: 1440, label: 'Sleep', color: '#1e1b4b' };
-                    timelineBlocks.push(block);
-                    listItems.push({ ...block, timeStr: `${minutesToTime(sleepMins)} → 12:00 AM`, durationMins: 1440 - sleepMins, companyName: 'Sleep', sessions: [] });
-                }
-            }
-        }
-
-        // 2. Actual sessions — merge consecutive only (within 5 min gap)
-        if (isPast || isToday2) {
-            // Sort sessions by start time
-            const sorted = [...daySessions].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-            const merged = [];
-
-            sorted.forEach(session => {
-                const taskName = session.tasks?.name || session.projects?.name || 'Session';
-                const color = session.companies?.color || '#6366f1';
-                const companyName = session.companies?.name || '';
-                const start = new Date(session.start_time);
-                const end = session.end_time ? new Date(session.end_time) : new Date();
-                const dayStart = new Date(`${selectedDateStr}T00:00:00`);
-                const dayEnd = new Date(`${selectedDateStr}T23:59:59`);
-                const effectiveStart = start < dayStart ? dayStart : start;
-                const effectiveEnd = end > dayEnd ? dayEnd : end;
-                const startMins = effectiveStart.getHours() * 60 + effectiveStart.getMinutes();
-                const endMins = Math.max(effectiveEnd.getHours() * 60 + effectiveEnd.getMinutes(), startMins + 2);
-
-                // Check if this session can merge with the last merged block
-                const last = merged.length > 0 ? merged[merged.length - 1] : null;
-                if (last && last.taskName === taskName && last.color === color && startMins <= last.endMins + 5) {
-                    // Merge — extend the block
-                    last.endMins = Math.max(last.endMins, endMins);
-                    last.sessions.push(session);
-                } else {
-                    // New block
-                    merged.push({
-                        taskName, color, companyName, startMins, endMins,
-                        sessions: [session],
-                    });
-                }
-            });
-
-            merged.forEach((m, i) => {
-                const totalMins = m.sessions.reduce((sum, s) => {
-                    const st = new Date(s.start_time);
-                    const en = s.end_time ? new Date(s.end_time) : new Date();
-                    return sum + (en - st) / 60000;
-                }, 0);
-                const block = {
-                    id: `session-${i}`, type: 'actual',
-                    startMins: m.startMins, endMins: m.endMins,
-                    label: m.taskName, color: m.color,
-                };
-                timelineBlocks.push(block);
-                listItems.push({
-                    ...block,
-                    companyName: m.companyName,
-                    timeStr: `${minutesToTime(m.startMins)} → ${minutesToTime(m.endMins)}`,
-                    durationMins: Math.round(totalMins),
-                    sessionCount: m.sessions.length,
-                    sessions: m.sessions,
-                });
-            });
-        }
-
-        // 3. Planned blocks (today & future)
-        if (isToday2 || isFuture) {
-            selectedDayBlocks.forEach((block, i) => {
-                const startMins = parseTimeToMinutes(block.start_time);
-                const endMins = parseTimeToMinutes(block.end_time);
-                const tb = { id: `block-${i}`, type: 'planned', startMins, endMins, label: block.label, color: block.color || '#6366f1' };
-                timelineBlocks.push(tb);
-                listItems.push({ ...tb, companyName: 'Planned', timeStr: `${block.start_time} → ${block.end_time}`, durationMins: endMins - startMins, sessions: [] });
-            });
-        }
-
-        // 4. Scheduled tasks (today & future)
-        if (isToday2 || isFuture) {
-            selectedDayTasks.forEach((task, i) => {
-                if (!task.scheduled_start_time) return;
-                const startMins = parseTimeToMinutes(task.scheduled_start_time);
-                const durMins = DURATION_MINUTES[task.duration_estimate] || 45;
-                const dOpt = DURATION_OPTIONS.find(d => d.value === task.duration_estimate);
-                const tb = { id: `task-${i}`, type: 'task', startMins, endMins: startMins + durMins, label: task.title, color: dOpt?.color || '#6366f1' };
-                timelineBlocks.push(tb);
-                listItems.push({ ...tb, companyName: 'Scheduled', timeStr: `${task.scheduled_start_time} → ${minutesToTime(startMins + durMins)}`, durationMins: durMins, sessions: [] });
-            });
-        }
-
-        // Sort timeline blocks and list items by start time
-        timelineBlocks.sort((a, b) => a.startMins - b.startMins);
-        listItems.sort((a, b) => a.startMins - b.startMins);
-
-        // Get unique companies for filter chips
-        const companySet = new Map();
-        listItems.forEach(item => {
-            if (item.companyName && !companySet.has(item.companyName)) {
-                companySet.set(item.companyName, item.color);
-            }
-        });
-
-        return { timelineBlocks, listItems, companies: Array.from(companySet, ([name, color]) => ({ name, color })) };
-    };
-
-    const timelineData = selectedDate ? buildTimelineItems() : { timelineBlocks: [], listItems: [], companies: [] };
-    const filteredListItems = filterCompany === 'all'
-        ? timelineData.listItems
-        : timelineData.listItems.filter(it => it.companyName === filterCompany);
-
-    if (loading) {
-        return (
-            <AppLayout>
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}>
-                    <div className="loading-spinner" />
-                </div>
-            </AppLayout>
-        );
-    }
+    // Toggle logic for small screens
+    const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
     return (
-        <AppLayout>
-            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-                <div>
-                    <h2><Icon name="calendar" size={24} className="icon-inline" /> Schedule</h2>
-                    <p>Plan your week, track your day</p>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setShowAddBlock(true)}>
-                        <Icon name="plus" size={14} /> Add Block
-                    </button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setShowImport(!showImport)}>
-                        <Icon name="upload" size={14} /> Import Sleep
-                    </button>
-                </div>
-            </div>
-
-            {/* Apple Health Import */}
-            {showImport && (
-                <div className="card" style={{ marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Icon name="upload" size={16} /> Import Apple Health Sleep Data
-                    </h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                        Export your health data from iPhone (Settings → Health → Export All Health Data), then upload the <code>export.xml</code> file here. Sleep data will be automatically parsed and added to your timeline.
-                    </p>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".xml"
-                        onChange={handleHealthImport}
-                        style={{ display: 'none' }}
-                    />
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-primary btn-sm" onClick={() => fileInputRef.current?.click()}>
-                            <Icon name="upload" size={14} /> Choose XML File
+        <AppLayout hideGlobalSidebar={false}>
+            <div className="schedule-workspace">
+                
+                {/* ==================================================== */}
+                {/* TODOIST-STYLE INNER SIDEBAR */}
+                {/* ==================================================== */}
+                <div className={`schedule-sidebar ${!sidebarOpen ? 'closed' : ''}`}>
+                    <div className="sidebar-header">
+                        <button className="btn-icon" onClick={toggleSidebar} title="Collapse Sidebar">
+                            <Icon name="menu" size={16} />
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(false)}>Cancel</button>
+                        <span className="sidebar-title">SDLX Schedule</span>
                     </div>
-                </div>
-            )}
 
-            {/* Add Block Modal */}
-            {showAddBlock && (
-                <div className="card" style={{ marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px' }}>New Schedule Block</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                        <div className="input-group">
-                            <label>Label</label>
-                            <input className="input" placeholder="e.g. Physical Job" value={blockLabel} onChange={e => setBlockLabel(e.target.value)} />
-                        </div>
-                        <div className="input-group">
-                            <label>Type</label>
-                            <select className="input" value={blockType} onChange={e => setBlockType(e.target.value)}>
-                                <option value="physical_job">Physical Job</option>
-                                <option value="planned">Planned</option>
-                                <option value="custom">Custom</option>
-                            </select>
-                        </div>
-                        <div className="input-group">
-                            <label>Start Time</label>
-                            <input className="input" type="time" value={blockStart} onChange={e => setBlockStart(e.target.value)} />
-                        </div>
-                        <div className="input-group">
-                            <label>End Time</label>
-                            <input className="input" type="time" value={blockEnd} onChange={e => setBlockEnd(e.target.value)} />
-                        </div>
+                    <div className="sidebar-primary-action">
+                        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'flex-start', padding: '10px 16px', borderRadius: '10px', fontWeight: 600 }}>
+                            <Icon name="plus" size={16} /> Add Task
+                        </button>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                            <input type="checkbox" checked={blockRecurring} onChange={e => setBlockRecurring(e.target.checked)} />
-                            Recurring weekly
-                        </label>
-                        <input className="input" type="color" value={blockColor} onChange={e => setBlockColor(e.target.value)} style={{ width: '40px', height: '32px', padding: '2px' }} />
-                    </div>
-                    {blockRecurring && (
-                        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                            {DAY_NAMES.map((d, i) => (
-                                <button
-                                    key={i}
-                                    className={`duration-chip ${blockDays.includes(i) ? 'active' : ''}`}
-                                    style={blockDays.includes(i) ? { background: blockColor, color: '#fff', borderColor: blockColor } : {}}
-                                    onClick={() => setBlockDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
-                                >
-                                    {d}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-primary btn-sm" onClick={handleAddBlock}>Create Block</button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setShowAddBlock(false)}>Cancel</button>
-                    </div>
-                </div>
-            )}
 
-            {/* ===== MINI CALENDAR ===== */}
-            <div className="card" style={{ padding: '14px 16px' }}>
-                {/* Header: nav + month name */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                            {MONTH_NAMES[currentMonth - 1]}
-                        </span>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 400, color: 'var(--accent)' }}>
-                            {currentYear}
-                        </span>
+                    <div className="sidebar-nav-section">
+                        <button className={`nav-item ${viewMode === 'inbox' ? 'active' : ''}`} onClick={() => setViewMode('inbox')}>
+                            <Icon name="inbox" size={16} /> Inbox
+                            <span className="badge">5</span>
+                        </button>
+                        <button className={`nav-item ${viewMode === 'today' ? 'active' : ''}`} onClick={() => setViewMode('today')}>
+                            <Icon name="calendar" size={16} /> Today
+                            <span className="badge today-badge">12</span>
+                        </button>
+                        <button className={`nav-item ${viewMode === 'upcoming' ? 'active' : ''}`} onClick={() => setViewMode('upcoming')}>
+                            <Icon name="calendar" size={16} /> Upcoming
+                        </button>
+                        <button className="nav-item">
+                            <Icon name="search" size={16} /> Search & Filters
+                        </button>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem', padding: '2px 8px' }} onClick={() => {
-                            const t = new Date();
-                            setCurrentMonth(t.getMonth() + 1);
-                            setCurrentYear(t.getFullYear());
-                            setSelectedDate(t.getDate());
-                        }}>Today</button>
-                        <button className="btn-icon" onClick={prevMonth} style={{ padding: '3px' }}><Icon name="arrow-left" size={13} /></button>
-                        <button className="btn-icon" onClick={nextMonth} style={{ padding: '3px' }}><Icon name="arrow-right" size={13} /></button>
+
+                    <div className="sidebar-nav-section">
+                        <div className="section-title">My Projects</div>
+                        <button className="nav-item project-item">
+                            <span className="color-dot" style={{ backgroundColor: '#22c55e' }}></span> PocketGC
+                        </button>
+                        <button className="nav-item project-item">
+                            <span className="color-dot" style={{ backgroundColor: '#3b82f6' }}></span> Digital Mechanic
+                        </button>
+                        <div className="section-title" style={{ marginTop: '16px' }}>Team Projects</div>
+                        <button className="nav-item project-item">
+                            <span className="color-dot" style={{ backgroundColor: '#f59e0b' }}></span> Antigravity Build
+                        </button>
+                    </div>
+
+                    {/* Expandable Mini Calendar Placeholder */}
+                    <div className="sidebar-mini-calendar">
+                        <div className="section-title">Calendar</div>
+                        <div className="mini-calendar-placeholder">
+                            [Mini Month Calendar]
+                        </div>
                     </div>
                 </div>
 
-                {/* Day name headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: '2px' }}>
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                        <div key={i} style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)', padding: '3px 0', letterSpacing: '0.5px' }}>{d}</div>
-                    ))}
-                </div>
 
-                {/* Month grid */}
-                {(() => {
-                    const todayISO = new Date().toISOString().split('T')[0];
-                    const prevMonthDays = new Date(currentYear, currentMonth - 1, 0).getDate();
-                    const cells = [];
-
-                    // Previous month faded days
-                    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-                        const d = new Date(currentYear, currentMonth - 2, prevMonthDays - i);
-                        cells.push({ dateObj: d, faded: true });
-                    }
-                    // Current month days
-                    for (let i = 1; i <= daysInMonth; i++) {
-                        cells.push({ dateObj: new Date(currentYear, currentMonth - 1, i), faded: false });
-                    }
-                    // Next month trailing days
-                    const remaining = 7 - (cells.length % 7);
-                    if (remaining < 7) {
-                        for (let i = 1; i <= remaining; i++) {
-                            cells.push({ dateObj: new Date(currentYear, currentMonth, i), faded: true });
-                        }
-                    }
-
-                    return (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px' }}>
-                            {cells.map(({ dateObj, faded }, idx) => {
-                                const day = dateObj.getDate();
-                                const iso = dateObj.toISOString().split('T')[0];
-                                const isToday = iso === todayISO;
-                                const isSelected = !faded && day === selectedDate;
-
-                                // Activity dots
-                                let info = { colors: [], hasSessions: false, hasBlocks: false, isException: false };
-                                if (!faded) info = getDayInfo(day);
-                                const hasActivity = info.hasSessions || info.hasBlocks || info.hasScheduledTasks;
-
-                                return (
-                                    <div
-                                        key={idx}
-                                        onClick={() => {
-                                            if (faded) {
-                                                const m = dateObj.getMonth() + 1;
-                                                const y = dateObj.getFullYear();
-                                                setCurrentMonth(m);
-                                                setCurrentYear(y);
-                                            }
-                                            setSelectedDate(day);
-                                        }}
-                                        style={{
-                                            textAlign: 'center',
-                                            padding: '4px 0',
-                                            cursor: 'pointer',
-                                            borderRadius: '6px',
-                                            position: 'relative',
-                                            opacity: faded ? 0.3 : 1,
-                                            transition: 'background 0.1s',
-                                        }}
-                                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
-                                        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                {/* ==================================================== */}
+                {/* AKIFLOW-STYLE MAIN TIMELINE */}
+                {/* ==================================================== */}
+                <div className="schedule-main">
+                    
+                    {/* Header Bar */}
+                    <div className="timeline-header-bar">
+                        {!sidebarOpen && (
+                            <button className="btn-icon" onClick={toggleSidebar}>
+                                <Icon name="menu" size={16} />
+                            </button>
+                        )}
+                        <div className="date-display">
+                            <h2>Today</h2>
+                            <span>{currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric'})}</span>
+                        </div>
+                        
+                        <div className="view-controls">
+                            <div className="horizon-toggle">
+                                {[1, 3, 5, 7].map(days => (
+                                    <button 
+                                        key={days}
+                                        className={`horizon-btn ${horizonDays === days ? 'active' : ''}`}
+                                        onClick={() => setHorizonDays(days)}
                                     >
-                                        <div style={{
-                                            width: '26px', height: '26px', lineHeight: '26px',
-                                            margin: '0 auto', borderRadius: '50%',
-                                            fontSize: '0.75rem',
-                                            fontWeight: isToday ? 800 : 500,
-                                            color: isSelected ? '#fff' : isToday ? '#fff' : 'var(--text-primary)',
-                                            background: isSelected
-                                                ? 'var(--accent)'
-                                                : isToday
-                                                    ? 'rgba(99, 102, 241, 0.7)'
-                                                    : 'transparent',
-                                        }}>
-                                            {day}
-                                        </div>
-                                        {/* Activity dots */}
-                                        {hasActivity && (
-                                            <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '1px', height: '4px' }}>
-                                                {info.colors.slice(0, 3).map((c, ci) => (
-                                                    <span key={ci} style={{ width: '3px', height: '3px', borderRadius: '50%', background: isSelected ? 'rgba(255,255,255,0.6)' : c }} />
-                                                ))}
-                                            </div>
-                                        )}
-                                        {!hasActivity && <div style={{ height: '4px', marginTop: '1px' }} />}
-                                        {info.isException && <span style={{ position: 'absolute', top: '0', right: '2px', fontSize: '0.5rem', color: 'var(--color-danger)' }}>✕</span>}
-                                    </div>
-                                );
-                            })}
+                                        {days}D
+                                    </button>
+                                ))}
+                            </div>
+                            <button className="btn btn-ghost btn-sm">
+                                <Icon name="eye" size={14} /> Show Sessions
+                            </button>
+                            <button className="btn-icon">
+                                <Icon name="more-horizontal" size={16} />
+                            </button>
                         </div>
-                    );
-                })()}
-            </div>
-
-            {/* ===== DAY VIEW ===== */}
-            {selectedDate && (
-                <div className="card" style={{ marginTop: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Icon name="clock" size={16} />
-                            {MONTH_NAMES[currentMonth - 1]} {selectedDate}, {currentYear}
-                            {isPast && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>Past</span>}
-                            {isToday2 && <span style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 400 }}>Today</span>}
-                            {isFuture && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>Upcoming</span>}
-                        </h3>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setShowSleepInput(!showSleepInput)}>
-                            <Icon name="moon" size={14} /> Sleep
-                        </button>
                     </div>
 
-                    {/* Sleep input */}
-                    {showSleepInput && (
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '16px', flexWrap: 'wrap' }}>
-                            <div className="input-group" style={{ minWidth: '120px' }}>
-                                <label>Wake Time</label>
-                                <input className="input" type="time" value={wakeTimeInput} onChange={e => setWakeTimeInput(e.target.value)} />
+                    {/* The Timelines Container */}
+                    <div className="timeline-grid-container">
+                        {/* 
+                            For each day in horizonDays, render a column.
+                            Here we mock a 1-day view exactly.
+                        */}
+                        <div className="timeline-day-column">
+                            {/* Day Header (Tasks Inbox for this day) */}
+                            <div className="day-header-inbox">
+                                <div className="day-stats">
+                                    <span className="stat-badge small">3 Small</span>
+                                    <span className="stat-badge medium">2 Med</span>
+                                    <span className="stat-badge large">1 Lg</span>
+                                </div>
+                                <div className="dateless-tasks-row">
+                                    <div className="dateless-task">
+                                        <div className="checkbox"></div>
+                                        <span>Call Jon</span>
+                                    </div>
+                                    <div className="dateless-task">
+                                        <div className="checkbox"></div>
+                                        <span>Review Taxes</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="input-group" style={{ minWidth: '120px' }}>
-                                <label>Sleep Time</label>
-                                <input className="input" type="time" value={sleepTimeInput} onChange={e => setSleepTimeInput(e.target.value)} />
-                            </div>
-                            <button className="btn btn-primary btn-sm" onClick={handleSaveSleep}>Save</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setShowSleepInput(false)}>Cancel</button>
-                        </div>
-                    )}
 
-                    {/* ===== DAILY BREAKDOWN BAR ===== */}
-                    {timelineData.listItems.filter(it => it.type !== 'sleep').length > 0 && (() => {
-                        const nonSleep = timelineData.listItems.filter(it => it.type !== 'sleep');
-                        const totalMins = nonSleep.reduce((sum, it) => sum + (it.durationMins || 0), 0);
-                        if (totalMins <= 0) return null;
-                        return (
-                            <div className="day-breakdown-bar">
-                                {nonSleep.map(item => {
-                                    const pct = Math.max((item.durationMins / totalMins) * 100, 2);
-                                    const durStr = item.durationMins >= 60
-                                        ? `${Math.floor(item.durationMins / 60)}h ${item.durationMins % 60}m`
-                                        : `${item.durationMins}m`;
+                            {/* Vertical Time Blocks */}
+                            <div className="time-blocks-grid">
+                                {Array.from({ length: 15 }).map((_, i) => {
+                                    const hour = i + 7; // 7am to 9pm
+                                    const formattedHour = hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`;
                                     return (
-                                        <div
-                                            key={item.id}
-                                            className="breakdown-segment"
-                                            style={{ width: `${pct}%`, backgroundColor: item.color }}
-                                            title={`${item.label}: ${durStr}`}
-                                        >
-                                            {pct > 10 && <span className="breakdown-label">{item.label}</span>}
+                                        <div key={i} className="time-row">
+                                            <div className="time-label">{formattedHour}</div>
+                                            <div className="time-slot">
+                                                {/* Grid lines & absolute positioned blocks go here */}
+                                            </div>
                                         </div>
                                     );
                                 })}
+                                
+                                {/* Placeholder Blocks for visualization */}
+                                <div className="mock-block" style={{ top: '80px', height: '120px', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderLeft: '3px solid #3b82f6' }}>
+                                    <span className="time">8:00 AM - 10:00 AM</span>
+                                    <strong>Deep Work: App Layout</strong>
+                                </div>
+                                <div className="mock-block apple-cal" style={{ top: '240px', height: '60px' }}>
+                                    <span className="time">11:00 AM</span>
+                                    <strong>Team Sync (Apple Cal)</strong>
+                                </div>
+                                <div className="mock-block" style={{ top: '380px', height: '180px', backgroundColor: 'rgba(34, 197, 94, 0.2)', borderLeft: '3px solid #22c55e' }}>
+                                    <span className="time">1:20 PM - 4:20 PM</span>
+                                    <strong>Golden Bike Shop Shift</strong>
+                                </div>
                             </div>
-                        );
-                    })()}
-
-                    {/* ===== FILTER CHIPS ===== */}
-                    {timelineData.companies.length >= 1 && (
-                        <div style={{ display: 'flex', gap: '6px', marginTop: '12px', flexWrap: 'wrap' }}>
-                            <button
-                                className={`session-filter-chip ${filterCompany === 'all' ? 'active' : ''}`}
-                                onClick={() => setFilterCompany('all')}
-                            >
-                                All ({timelineData.listItems.length})
-                            </button>
-                            {timelineData.companies.map(c => {
-                                const count = timelineData.listItems.filter(it => it.companyName === c.name).length;
-                                return (
-                                    <button
-                                        key={c.name}
-                                        className={`session-filter-chip ${filterCompany === c.name ? 'active' : ''}`}
-                                        style={filterCompany === c.name ? { backgroundColor: c.color, borderColor: c.color, color: '#fff' } : { borderColor: c.color, color: c.color }}
-                                        onClick={() => setFilterCompany(filterCompany === c.name ? 'all' : c.name)}
-                                    >
-                                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: c.color, flexShrink: 0 }} />
-                                        {c.name} ({count})
-                                    </button>
-                                );
-                            })}
                         </div>
-                    )}
-
-                    {/* ===== SESSION LIST ===== */}
-                    <div className="session-list" style={{ marginTop: '16px' }}>
-                        {filteredListItems.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                {isFuture ? 'No scheduled items for this day' : 'No sessions recorded'}
-                            </div>
-                        )}
-                        {filteredListItems.map(item => {
-                            const isExpanded = expandedBlock === item.id;
-                            const durStr = item.durationMins >= 60
-                                ? `${Math.floor(item.durationMins / 60)}h ${item.durationMins % 60}m`
-                                : `${item.durationMins}m`;
-                            const isSleep = item.type === 'sleep';
-                            return (
-                                <div key={item.id}>
-                                    <div
-                                        className={`session-list-item ${isExpanded ? 'expanded' : ''} ${isSleep ? 'sleep' : ''}`}
-                                        onClick={() => setExpandedBlock(isExpanded ? null : item.id)}
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                                            <div className="session-color-dot" style={{ backgroundColor: item.color }} />
-                                            <div style={{ minWidth: 0, flex: 1 }}>
-                                                <div className="session-list-name">
-                                                    {isSleep && <Icon name="moon" size={12} style={{ marginRight: '4px', opacity: 0.6 }} />}
-                                                    {item.label}
-                                                </div>
-                                                <div className="session-list-meta">
-                                                    {item.companyName}
-                                                    {item.sessionCount > 1 && ` • ${item.sessionCount} sessions`}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                            <div className="session-list-time">{item.timeStr}</div>
-                                            <div className="session-list-duration">{durStr}</div>
-                                        </div>
-                                    </div>
-                                    {/* Expanded session details */}
-                                    {isExpanded && (
-                                        <div className="session-detail-expand">
-                                            {item.sessions?.length > 0 && item.sessions.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)).map((session, si) => {
-                                                const s = new Date(session.start_time);
-                                                const e = session.end_time ? new Date(session.end_time) : null;
-                                                const dur = e ? Math.round((e - s) / 60000) : 0;
-                                                const ds = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60}m` : `${dur}m`;
-                                                return (
-                                                    <div key={si} className="session-detail-row">
-                                                        <span>
-                                                            {s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                            {e ? ` → ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ' → Active'}
-                                                        </span>
-                                                        <span>{ds}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {isSleep && sleepLog && (
-                                                <div className="session-detail-row" style={{ opacity: 0.7 }}>
-                                                    <span>🌙 Sleep log data</span>
-                                                    <span>{sleepLog.quality ? `Quality: ${sleepLog.quality}/5` : ''}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
                     </div>
-                </div>
-            )}
-
-            {/* ===== TASK NOTEPAD + AI SCHEDULER ===== */}
-            <div className="card" style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Icon name="clipboard" size={16} /> Task Notepad
-                </h3>
-
-                {/* Add task input */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                    <div className="input-group" style={{ flex: 1, minWidth: '200px' }}>
-                        <label>What needs to get done?</label>
-                        <input
-                            className="input"
-                            placeholder="e.g. Update Gaga Leads mobile app..."
-                            value={newTaskTitle}
-                            onChange={e => setNewTaskTitle(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                        {DURATION_OPTIONS.map(opt => (
-                            <button
-                                key={opt.value}
-                                className={`duration-chip ${newTaskDuration === opt.value ? 'active' : ''}`}
-                                style={newTaskDuration === opt.value ? { background: opt.color, color: '#fff', borderColor: opt.color } : {}}
-                                onClick={() => setNewTaskDuration(opt.value)}
-                                title={opt.value === 'unknown' ? 'Unknown duration' : `${opt.label} task`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-                    <button className="btn btn-primary btn-sm" onClick={handleAddTask}>Add</button>
-                </div>
-
-                {/* Task list */}
-                <div className="task-notepad-list">
-                    {tasks.filter(t => t.status !== 'done').length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            No pending tasks. Add one above!
-                        </div>
-                    ) : (
-                        tasks.filter(t => t.status !== 'done').map(task => {
-                            const dOpt = DURATION_OPTIONS.find(d => d.value === task.duration_estimate);
-                            const isScheduling = expandedBlock === `task-${task.id}`;
-                            return (
-                                <div key={task.id} className="task-notepad-item" style={{ flexDirection: 'column', gap: '6px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                                            <button
-                                                className="btn-icon"
-                                                style={{ color: 'var(--color-success)' }}
-                                                onClick={async () => {
-                                                    await updateScheduleTask(task.id, { status: 'done', completed_at: new Date().toISOString() });
-                                                    loadMonthData();
-                                                }}
-                                                title="Mark done"
-                                            >
-                                                <Icon name="check" size={14} />
-                                            </button>
-                                            <span style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {task.title}
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                                            <span
-                                                className="duration-chip active"
-                                                style={{ background: dOpt?.color || '#6366f1', color: '#fff', borderColor: dOpt?.color || '#6366f1', cursor: 'default', fontSize: '0.7rem', padding: '2px 8px' }}
-                                            >
-                                                {dOpt?.label || '?'}
-                                            </span>
-                                            {task.scheduled_date && (
-                                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                    {new Date(task.scheduled_date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                                    {task.scheduled_start_time && <> · {task.scheduled_start_time.slice(0,5)}</>}
-                                                    {task.scheduled_end_time && <>–{task.scheduled_end_time.slice(0,5)}</>}
-                                                </span>
-                                            )}
-                                            <button
-                                                className="btn btn-ghost btn-sm"
-                                                style={{ padding: '3px 8px', fontSize: '0.7rem' }}
-                                                onClick={() => setExpandedBlock(isScheduling ? null : `task-${task.id}`)}
-                                            >
-                                                <Icon name="sparkle" size={10} /> {isScheduling ? 'Close' : '+ Schedule'}
-                                            </button>
-                                            <button
-                                                className="btn-icon"
-                                                style={{ color: 'var(--color-danger)' }}
-                                                onClick={async () => {
-                                                    await deleteScheduleTask(task.id);
-                                                    loadMonthData();
-                                                }}
-                                            >
-                                                <Icon name="close" size={12} />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Inline schedule form */}
-                                    {isScheduling && (
-                                        <div style={{
-                                            display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap',
-                                            padding: '8px 0 4px 34px', width: '100%',
-                                        }}>
-                                            <div className="input-group" style={{ flex: '0 0 auto' }}>
-                                                <label style={{ fontSize: '0.68rem' }}>Date</label>
-                                                <input
-                                                    className="input"
-                                                    type="date"
-                                                    id={`task-date-${task.id}`}
-                                                    defaultValue={task.scheduled_date || new Date().toISOString().split('T')[0]}
-                                                    style={{ fontSize: '0.78rem', width: '140px' }}
-                                                />
-                                            </div>
-                                            <div className="input-group" style={{ flex: '0 0 auto' }}>
-                                                <label style={{ fontSize: '0.68rem' }}>Start</label>
-                                                <input
-                                                    className="input"
-                                                    type="time"
-                                                    id={`task-start-${task.id}`}
-                                                    defaultValue={task.scheduled_start_time || '09:00'}
-                                                    style={{ fontSize: '0.78rem', width: '110px' }}
-                                                />
-                                            </div>
-                                            <div className="input-group" style={{ flex: '0 0 auto' }}>
-                                                <label style={{ fontSize: '0.68rem' }}>End</label>
-                                                <input
-                                                    className="input"
-                                                    type="time"
-                                                    id={`task-end-${task.id}`}
-                                                    defaultValue={task.scheduled_end_time || '10:00'}
-                                                    style={{ fontSize: '0.78rem', width: '110px' }}
-                                                />
-                                            </div>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.72rem' }} onClick={async () => {
-                                                const date = document.getElementById(`task-date-${task.id}`)?.value;
-                                                const start = document.getElementById(`task-start-${task.id}`)?.value;
-                                                const end = document.getElementById(`task-end-${task.id}`)?.value;
-                                                await scheduleTask(task.id, date, start, end);
-                                                setExpandedBlock(null);
-                                                loadMonthData();
-                                            }}>
-                                                <Icon name="calendar" size={10} /> Set Time
-                                            </button>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => handleAISchedule(task)}>
-                                                <Icon name="sparkle" size={10} /> AI Suggest
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })
-                    )}
                 </div>
             </div>
 
-            {/* ===== APPLE CALENDAR ===== */}
-            <div className="card" style={{ marginTop: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Icon name="calendar" size={16} /> Apple Calendar
-                        {appleCalEvents && (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                                ({appleCalEvents.length} event{appleCalEvents.length !== 1 ? 's' : ''})
-                            </span>
-                        )}
-                    </h3>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        {appleCalSyncedAt && (
-                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                                Synced {new Date(appleCalSyncedAt).toLocaleString([], { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })}
-                            </span>
-                        )}
-                        <button className="btn btn-secondary btn-sm" onClick={loadAppleCalendar} disabled={appleCalLoading}>
-                            <Icon name="zap" size={12} /> {appleCalLoading ? 'Loading...' : 'Refresh'}
-                        </button>
-                    </div>
-                </div>
+            {/* Scoped CSS for the new layout shell to keep it clean */}
+            <style jsx>{`
+                .schedule-workspace {
+                    display: flex;
+                    height: calc(100vh - 64px); /* assuming top bar */
+                    background-color: var(--bg-primary);
+                    color: var(--text-primary);
+                    overflow: hidden;
+                    font-family: 'Inter', -apple-system, sans-serif;
+                }
 
-                {!appleCalEvents ? (
-                    <div style={{ padding: '16px', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                        <div style={{ marginBottom: '8px' }}>Apple Calendar syncs automatically from your Mac every 15 minutes.</div>
-                        <button className="btn btn-primary btn-sm" onClick={loadAppleCalendar}>
-                            <Icon name="zap" size={12} /> Check for synced events
-                        </button>
-                        <div style={{ marginTop: '10px', fontSize: '0.7rem', opacity: 0.7 }}>
-                            Not seeing events? Run the sync script on your Mac:<br/>
-                            <code style={{ fontSize: '0.68rem', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px' }}>
-                                HOLDCO_USER_ID=your-id ./scripts/sync-apple-calendar.sh
-                            </code>
-                        </div>
-                    </div>
-                ) : (() => {
-                    // Group events by date, show upcoming
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const upcoming = appleCalEvents
-                        .filter(e => e.date >= todayStr && !e.allDay)
-                        .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
-                        .slice(0, 20);
-                    const calColors = {
-                        'Work': '#3b82f6', 'Personal Stuff': '#a855f7', 'Home': '#10b981',
-                        'Love 🫶🏼': '#ec4899', 'Calendar': '#6366f1', 'Scheduled Reminders': '#f59e0b',
-                    };
+                /* SIDEBAR */
+                .schedule-sidebar {
+                    width: 260px;
+                    background-color: var(--bg-secondary);
+                    border-right: 1px solid var(--border-color);
+                    display: flex;
+                    flex-direction: column;
+                    transition: width 0.3s ease;
+                    overflow-y: auto;
+                }
+                .schedule-sidebar.closed {
+                    width: 0;
+                    border: none;
+                    overflow: hidden;
+                }
+                .sidebar-header {
+                    display: flex;
+                    align-items: center;
+                    padding: 16px;
+                    gap: 12px;
+                }
+                .sidebar-title {
+                    font-weight: 700;
+                    font-size: 1.1rem;
+                    letter-spacing: -0.01em;
+                }
+                .sidebar-primary-action {
+                    padding: 0 16px 16px;
+                }
+                
+                .sidebar-nav-section {
+                    padding: 0 8px 16px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                }
+                .nav-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 8px 12px;
+                    background: transparent;
+                    border: none;
+                    color: var(--text-secondary);
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    text-align: left;
+                }
+                .nav-item:hover {
+                    background: var(--bg-tertiary);
+                    color: var(--text-primary);
+                }
+                .nav-item.active {
+                    background: rgba(99, 102, 241, 0.1);
+                    color: var(--accent);
+                    font-weight: 600;
+                }
+                .badge {
+                    margin-left: auto;
+                    background: var(--bg-tertiary);
+                    color: var(--text-muted);
+                    font-size: 0.75rem;
+                    padding: 2px 6px;
+                    border-radius: 12px;
+                    font-weight: 600;
+                }
+                .today-badge {
+                    background: var(--accent);
+                    color: #fff;
+                }
+                
+                .section-title {
+                    font-size: 0.75rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    color: var(--text-muted);
+                    font-weight: 700;
+                    padding: 8px 12px 4px;
+                }
+                .project-item {
+                    padding: 6px 12px;
+                }
+                .color-dot {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                }
+                .sidebar-mini-calendar {
+                    padding: 0 8px 16px;
+                    margin-top: auto;
+                }
+                .mini-calendar-placeholder {
+                    background: var(--bg-tertiary);
+                    border-radius: 8px;
+                    padding: 24px;
+                    text-align: center;
+                    color: var(--text-muted);
+                    font-size: 0.85rem;
+                    margin: 0 8px;
+                }
 
-                    // Group by date
-                    const byDate = {};
-                    upcoming.forEach(e => {
-                        if (!byDate[e.date]) byDate[e.date] = [];
-                        byDate[e.date].push(e);
-                    });
+                /* MAIN AKIFLOW AREA */
+                .schedule-main {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                    background-color: var(--bg-primary);
+                }
+                
+                .timeline-header-bar {
+                    display: flex;
+                    align-items: center;
+                    padding: 16px 24px;
+                    border-bottom: 1px solid var(--border-color);
+                    gap: 16px;
+                }
+                .date-display h2 {
+                    margin: 0;
+                    font-size: 1.25rem;
+                    font-weight: 700;
+                }
+                .date-display span {
+                    font-size: 0.85rem;
+                    color: var(--text-muted);
+                }
+                .view-controls {
+                    margin-left: auto;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .horizon-toggle {
+                    display: flex;
+                    background: var(--bg-secondary);
+                    border-radius: 8px;
+                    padding: 2px;
+                }
+                .horizon-btn {
+                    background: transparent;
+                    border: none;
+                    color: var(--text-secondary);
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    padding: 4px 12px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                }
+                .horizon-btn.active {
+                    background: var(--bg-tertiary);
+                    color: var(--text-primary);
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
 
-                    return (
-                        <div>
-                            {Object.entries(byDate).slice(0, 7).map(([date, events]) => (
-                                <div key={date} style={{ marginBottom: '10px' }}>
-                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px' }}>
-                                        {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                                    </div>
-                                    {events.map((ev, i) => (
-                                        <div key={i} style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                            padding: '6px 10px', borderRadius: 'var(--radius-sm)',
-                                            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                                            marginBottom: '3px',
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{
-                                                    width: '6px', height: '6px', borderRadius: '50%',
-                                                    background: calColors[ev.calendar] || '#6366f1',
-                                                }} />
-                                                <span style={{ fontSize: '0.82rem', fontWeight: 500 }}>{ev.summary}</span>
-                                                <span style={{ fontSize: '0.6rem', background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-                                                    {ev.calendar}
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                                {ev.startTime} → {ev.endTime}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                            {upcoming.length === 0 && (
-                                <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                                    No upcoming events found.
-                                </div>
-                            )}
-                        </div>
-                    );
-                })()}
-            </div>
+                .timeline-grid-container {
+                    flex: 1;
+                    overflow-y: auto;
+                    display: flex;
+                    padding: 0 24px;
+                }
+                .timeline-day-column {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 300px;
+                    border-right: 1px solid var(--border-color);
+                }
+                .timeline-day-column:last-child {
+                    border-right: none;
+                }
 
-            {/* ===== AI SCHEDULER CHAT ===== */}
-            <div className="card" style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Icon name="brain" size={16} /> AI Schedule Assistant
-                </h3>
+                /* DAY INBOX HEADER */
+                .day-header-inbox {
+                    padding: 16px 0;
+                    border-bottom: 1px solid var(--border-color);
+                    background: var(--bg-primary);
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                }
+                .day-stats {
+                    display: flex;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                }
+                .stat-badge {
+                    font-size: 0.7rem;
+                    font-weight: 600;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                }
+                .stat-badge.small { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+                .stat-badge.medium { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+                .stat-badge.large { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+                
+                .dateless-tasks-row {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+                .dateless-task {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    background: var(--bg-secondary);
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-size: 0.9rem;
+                    border: 1px solid var(--border-color);
+                    cursor: grab;
+                }
+                .checkbox {
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid var(--text-muted);
+                    border-radius: 4px;
+                }
 
-                {aiResponse && (
-                    <div className="ai-message assistant" style={{ marginBottom: '12px', whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
-                        {aiResponse}
-                    </div>
-                )}
+                /* VERTICAL TIMELINE */
+                .time-blocks-grid {
+                    position: relative;
+                    padding-bottom: 40px;
+                }
+                .time-row {
+                    display: flex;
+                    height: 60px; /* 1 hour = 60px */
+                }
+                .time-label {
+                    width: 60px;
+                    font-size: 0.75rem;
+                    color: var(--text-muted);
+                    text-align: right;
+                    padding-right: 12px;
+                    position: relative;
+                    top: -8px; /* Center align with border */
+                }
+                .time-slot {
+                    flex: 1;
+                    border-top: 1px solid var(--border-color);
+                }
 
-                <div className="ai-input-row">
-                    <input
-                        className="input"
-                        placeholder="Ask AI to help schedule tasks, compress your day, or find open slots..."
-                        value={aiMessage}
-                        onChange={e => setAiMessage(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleAIChat()}
-                        disabled={aiLoading}
-                    />
-                    <button className="btn btn-primary" onClick={handleAIChat} disabled={aiLoading || !aiMessage.trim()}>
-                        {aiLoading ? <Icon name="hourglass" size={14} /> : 'Send'}
-                    </button>
-                </div>
-            </div>
-
-            {/* ===== APPLE CALENDAR SYNC ===== */}
-            {user?.id && (
-                <div className="card" style={{ marginTop: '16px' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Icon name="calendar" size={16} /> Sync to Apple Calendar
-                    </h3>
-                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                        Subscribe to this feed in Apple Calendar to see all your HoldCo OS schedule blocks on your iPhone, Mac, and iPad.
-                        Events you add here will automatically appear in Apple Calendar within 15 minutes.
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                            className="input"
-                            readOnly
-                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/calendar-feed?uid=${user.id}`}
-                            style={{ flex: 1, minWidth: '200px', fontSize: '0.75rem', fontFamily: "'JetBrains Mono', monospace" }}
-                            onClick={(e) => e.target.select()}
-                        />
-                        <button className="btn btn-primary btn-sm" onClick={() => {
-                            const url = `${window.location.origin}/api/calendar-feed?uid=${user.id}`;
-                            navigator.clipboard?.writeText(url);
-                            alert('Feed URL copied! Open Apple Calendar → File → New Calendar Subscription → paste the URL');
-                        }}>
-                            <Icon name="link" size={12} /> Copy URL
-                        </button>
-                    </div>
-                    <div style={{ marginTop: '10px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        <strong>How to subscribe:</strong> Apple Calendar → File → New Calendar Subscription → paste URL → set auto-refresh to "Every 15 minutes"
-                    </div>
-                </div>
-            )}
+                /* MOCK ABSOLUTE BLOCKS */
+                .mock-block {
+                    position: absolute;
+                    left: 60px; /* align with slot */
+                    right: 16px;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    display: flex;
+                    flex-direction: column;
+                    font-size: 0.85rem;
+                    overflow: hidden;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                }
+                .mock-block .time {
+                    font-size: 0.7rem;
+                    opacity: 0.8;
+                    margin-bottom: 2px;
+                }
+                .mock-block.apple-cal {
+                    background-color: var(--bg-tertiary);
+                    border-left: 3px solid var(--text-muted);
+                    color: var(--text-secondary);
+                }
+            `}</style>
         </AppLayout>
     );
 }
