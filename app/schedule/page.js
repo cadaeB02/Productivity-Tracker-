@@ -498,18 +498,26 @@ export default function SchedulePage() {
                                                         style={{ 
                                                             ...style,
                                                             zIndex: 2,
-                                                            cursor: 'grab',
+                                                            cursor: 'pointer',
                                                             touchAction: 'none',
                                                             backgroundColor: `${taskColor}18`,
                                                             borderLeft: `3px solid ${taskColor}`,
                                                         }} 
-                                                        draggable
-                                                        onDragStart={(e) => {
-                                                            e.dataTransfer.setData('rescheduleId', task.id);
-                                                            e.dataTransfer.effectAllowed = 'move';
-                                                        }}
                                                         onClick={() => { if (!resizing) setSelectedTask(task); }}
                                                     >
+                                                        <div 
+                                                            className="drag-handle"
+                                                            draggable
+                                                            onDragStart={(e) => {
+                                                                e.stopPropagation();
+                                                                e.dataTransfer.setData('rescheduleId', task.id);
+                                                                e.dataTransfer.effectAllowed = 'move';
+                                                            }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            title="Drag to reschedule"
+                                                        >
+                                                            <Icon name="grid" size={10} />
+                                                        </div>
                                                         <span className="time">{task.scheduled_start_time.slice(0,5)} {task.scheduled_end_time && `- ${task.scheduled_end_time.slice(0,5)}`}</span>
                                                         <strong>{task.title}</strong>
                                                         
@@ -831,7 +839,7 @@ export default function SchedulePage() {
                 }
                 .cal-cell.empty { cursor: default; }
                 .cal-cell.today {
-                    background: var(--accent);
+                    background: #3b82f6;
                     color: #fff;
                     font-weight: 700;
                 }
@@ -839,7 +847,6 @@ export default function SchedulePage() {
                     background: transparent;
                     color: #ef4444;
                     font-weight: 700;
-                    box-shadow: inset 0 0 0 2px #ef4444;
                 }
 
                 .schedule-main {
@@ -1021,6 +1028,26 @@ export default function SchedulePage() {
                     background: rgba(0,0,0,0.1);
                 }
 
+                .drag-handle {
+                    position: absolute;
+                    top: 4px;
+                    right: 6px;
+                    cursor: grab;
+                    opacity: 0.3;
+                    padding: 2px;
+                    border-radius: 3px;
+                    z-index: 10;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .drag-handle:hover {
+                    opacity: 0.7;
+                    background: rgba(0,0,0,0.08);
+                }
+                .drag-handle:active {
+                    cursor: grabbing;
+                }
                 .mock-block .time {
                     font-size: 0.7rem;
                     opacity: 0.8;
