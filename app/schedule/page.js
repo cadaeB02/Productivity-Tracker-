@@ -9,7 +9,7 @@ import { getCompanies, getScheduleTasks, getScheduleBlocks, getExceptions, getSe
 // Helpers
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const START_HOUR = 6; // Timeline starts at 6 AM
+const START_HOUR = 0; // Timeline starts at 12 AM (Midnight)
 const END_HOUR = 23;  // Timeline ends at 11 PM
 const HOUR_HEIGHT = 60; // 60px per hour
 
@@ -124,8 +124,9 @@ export default function SchedulePage() {
         
         let top = (startOffset / 60) * HOUR_HEIGHT;
         let diff = em - sm;
-        if (diff < 15) diff = 15; // Minimum 15 min height
-        let height = (diff / 60) * HOUR_HEIGHT;
+        
+        // Ensure the block is AT LEAST 28px tall so text is never clipped inside a crescent
+        let height = Math.max((diff / 60) * HOUR_HEIGHT, 28);
 
         if (top < 0) {
             height += top;
@@ -285,7 +286,7 @@ export default function SchedulePage() {
                                         <div className="time-blocks-grid">
                                             {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
                                                 const hour = i + START_HOUR;
-                                                const formattedHour = hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`;
+                                                const formattedHour = hour === 0 ? '12 AM' : hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`;
                                                 return (
                                                     <div key={i} className="time-row" style={{ height: `${HOUR_HEIGHT}px` }}>
                                                         <div className="time-label">{formattedHour}</div>
@@ -670,7 +671,7 @@ export default function SchedulePage() {
                     left: 60px; 
                     right: 16px;
                     border-radius: 6px;
-                    padding: 6px 10px;
+                    padding: 4px 10px;
                     display: flex;
                     flex-direction: column;
                     font-size: 0.85rem;
