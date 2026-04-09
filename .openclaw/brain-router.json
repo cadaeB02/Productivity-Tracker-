@@ -1,0 +1,114 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-04-09",
+  "default_brain": "local",
+  "brains": {
+    "local": {
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "api_url": "http://localhost:11434",
+      "api_format": "ollama",
+      "max_tokens": 8192,
+      "cost_per_token": 0,
+      "strengths": [
+        "Fast response time",
+        "Zero cost",
+        "Private — no data leaves the machine",
+        "Good for simple instruction following",
+        "Available offline"
+      ],
+      "weaknesses": [
+        "Limited reasoning depth",
+        "No vision/multimodal",
+        "Smaller context window",
+        "Can struggle with complex multi-step logic"
+      ]
+    },
+    "cloud": {
+      "provider": "anthropic",
+      "model": "claude-opus-4-20250409",
+      "api_url": "https://api.anthropic.com/v1/messages",
+      "api_format": "anthropic",
+      "max_tokens": 200000,
+      "cost_per_1k_input": 0.015,
+      "cost_per_1k_output": 0.075,
+      "strengths": [
+        "Deep reasoning and analysis",
+        "Multimodal — can read images/receipts",
+        "Massive context window (200K)",
+        "Excellent at synthesis and writing",
+        "Strong at financial/tax analysis"
+      ],
+      "weaknesses": [
+        "Costs money per token",
+        "Requires internet connection",
+        "Data leaves your machine",
+        "Higher latency"
+      ]
+    }
+  },
+  "routing_rules": [
+    {
+      "condition": "Simple CRUD (clock in, add expense, capture note)",
+      "brain": "local",
+      "reason": "No reasoning needed — just format and send the API call"
+    },
+    {
+      "condition": "Data retrieval (list sessions, read schedule, get companies)",
+      "brain": "local",
+      "reason": "Just fetching data, no analysis required"
+    },
+    {
+      "condition": "Status check (any active sessions? any pending items?)",
+      "brain": "local",
+      "reason": "Simple boolean/count check"
+    },
+    {
+      "condition": "Image processing (receipt scan, photo analysis)",
+      "brain": "cloud",
+      "reason": "Requires vision/multimodal capabilities"
+    },
+    {
+      "condition": "Financial analysis (tax planning, expense trends, revenue forecasting)",
+      "brain": "cloud",
+      "reason": "Complex multi-step reasoning over financial data"
+    },
+    {
+      "condition": "Morning briefing generation",
+      "brain": "cloud",
+      "reason": "Multi-source synthesis — needs to combine sessions, schedule, treasury, compliance"
+    },
+    {
+      "condition": "Strategic advice (what should I prioritize? how should I allocate time?)",
+      "brain": "cloud",
+      "reason": "Requires understanding patterns and making recommendations"
+    },
+    {
+      "condition": "Writing future implementation proposals",
+      "brain": "cloud",
+      "reason": "Needs to articulate technical requirements clearly"
+    },
+    {
+      "condition": "Compliance analysis (what deadlines are approaching? what filings needed?)",
+      "brain": "cloud",
+      "reason": "Needs to reason about dates, regulations, and implications"
+    },
+    {
+      "condition": "Cross-company comparison (time allocation, revenue split, productivity)",
+      "brain": "cloud",
+      "reason": "Multi-entity analysis requiring synthesized insights"
+    },
+    {
+      "condition": "Unknown or ambiguous task",
+      "brain": "local",
+      "reason": "Try local first — escalate to cloud only if local can't handle it"
+    }
+  ],
+  "escalation_triggers": [
+    "Local model response is uncertain or hedging",
+    "Task requires comparing data across multiple companies",
+    "User explicitly says 'think hard' or 'use Opus'",
+    "Task involves money above $500",
+    "Task requires generating a document or report"
+  ]
+}

@@ -1,0 +1,307 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-04-09",
+  "auth": {
+    "type": "bearer",
+    "header": "Authorization",
+    "format": "Bearer <agent-token>"
+  },
+  "tools": [
+    {
+      "id": "sessions.create",
+      "name": "Clock In",
+      "method": "POST",
+      "endpoint": "/api/openclaw/sessions",
+      "description": "Start a new work session. Creates an active session for a specific task.",
+      "params": {
+        "required": ["task_id", "project_id", "company_id"],
+        "optional": []
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": false,
+      "notes": "Check for active sessions first — avoid duplicates"
+    },
+    {
+      "id": "sessions.stop",
+      "name": "Clock Out",
+      "method": "PATCH",
+      "endpoint": "/api/openclaw/sessions",
+      "description": "End an active session. Optionally include a summary of work done.",
+      "params": {
+        "required": ["session_id"],
+        "optional": ["summary"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "sessions.list",
+      "name": "Get Sessions",
+      "method": "GET",
+      "endpoint": "/api/openclaw/sessions",
+      "description": "List sessions for a date range. Returns session data with task/project/company joins.",
+      "params": {
+        "required": [],
+        "optional": ["from", "to", "company_id", "active_only"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true,
+      "status": "needs_build"
+    },
+    {
+      "id": "projects.list",
+      "name": "List Projects",
+      "method": "GET",
+      "endpoint": "/api/openclaw/projects",
+      "description": "List all projects. Optionally filter by company_id.",
+      "params": {
+        "required": [],
+        "optional": ["company_id"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "projects.create",
+      "name": "Create Project",
+      "method": "POST",
+      "endpoint": "/api/openclaw/projects",
+      "description": "Create a new project under a company.",
+      "params": {
+        "required": ["company_id", "name"],
+        "optional": []
+      },
+      "brain": "local",
+      "destructiveness": "low"
+    },
+    {
+      "id": "tasks.list",
+      "name": "List Tasks",
+      "method": "GET",
+      "endpoint": "/api/openclaw/tasks",
+      "description": "List all tasks. Optionally filter by project_id or company_id.",
+      "params": {
+        "required": [],
+        "optional": ["project_id", "company_id"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "tasks.create",
+      "name": "Create Task",
+      "method": "POST",
+      "endpoint": "/api/openclaw/tasks",
+      "description": "Create a new task under a project.",
+      "params": {
+        "required": ["project_id", "company_id", "name"],
+        "optional": []
+      },
+      "brain": "local",
+      "destructiveness": "low"
+    },
+    {
+      "id": "expenses.list",
+      "name": "List Expenses",
+      "method": "GET",
+      "endpoint": "/api/openclaw/expenses",
+      "description": "List expense transactions. Optionally filter by company_id.",
+      "params": {
+        "required": [],
+        "optional": ["company_id", "from", "to"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "expenses.create",
+      "name": "Add Expense",
+      "method": "POST",
+      "endpoint": "/api/openclaw/expenses",
+      "description": "Create an expense transaction for a company.",
+      "params": {
+        "required": ["company_id", "amount", "description"],
+        "optional": ["category", "date", "vendor_id", "is_recurring"]
+      },
+      "brain": "local",
+      "destructiveness": "low"
+    },
+    {
+      "id": "treasury.list",
+      "name": "List Treasury",
+      "method": "GET",
+      "endpoint": "/api/openclaw/treasury",
+      "description": "List all transactions (revenue + expenses). Filter by company or type.",
+      "params": {
+        "required": [],
+        "optional": ["company_id", "type", "from", "to"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "treasury.create",
+      "name": "Add Treasury Entry",
+      "method": "POST",
+      "endpoint": "/api/openclaw/treasury",
+      "description": "Create a revenue or expense entry.",
+      "params": {
+        "required": ["company_id", "type", "amount", "description"],
+        "optional": ["category", "date", "is_recurring", "vendor_id"]
+      },
+      "brain": "local",
+      "destructiveness": "low"
+    },
+    {
+      "id": "companies.list",
+      "name": "List Companies",
+      "method": "GET",
+      "endpoint": "/api/openclaw/companies",
+      "description": "List all companies with entity info, pay config, and project counts.",
+      "params": {
+        "required": [],
+        "optional": ["entities_only"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true,
+      "status": "needs_build"
+    },
+    {
+      "id": "stats.get",
+      "name": "Get Stats",
+      "method": "GET",
+      "endpoint": "/api/openclaw/stats",
+      "description": "Get aggregated hours and earnings data. Powers the morning briefing.",
+      "params": {
+        "required": [],
+        "optional": ["range", "company_id"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true,
+      "status": "needs_build",
+      "notes": "range options: today, yesterday, week, month, all"
+    },
+    {
+      "id": "notes.capture",
+      "name": "Capture Note",
+      "method": "POST",
+      "endpoint": "/api/notes/capture",
+      "description": "Quick-capture a note. Auto-tagged to inbox category.",
+      "params": {
+        "required": ["content"],
+        "optional": ["title", "category", "company_id"]
+      },
+      "brain": "local",
+      "destructiveness": "none"
+    },
+    {
+      "id": "schedule.read",
+      "name": "Read Schedule",
+      "method": "GET",
+      "endpoint": "/api/agent-schedule",
+      "description": "Read schedule blocks, tasks, auto-clock rules, sleep logs, and exceptions for a date range.",
+      "params": {
+        "required": ["from", "to"],
+        "optional": []
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "schedule.write",
+      "name": "Write Schedule",
+      "method": "POST",
+      "endpoint": "/api/agent-schedule",
+      "description": "Create schedule entries — blocks, tasks, exceptions, or auto-clock rules.",
+      "params": {
+        "required": [],
+        "optional": ["blocks", "tasks", "exceptions", "auto_clock_rules"]
+      },
+      "brain": "local",
+      "destructiveness": "low"
+    },
+    {
+      "id": "autoclock.read",
+      "name": "Read Auto-Clock Rules",
+      "method": "GET",
+      "endpoint": "/api/auto-clock",
+      "description": "List auto-clock rules for the user.",
+      "params": { "required": [], "optional": [] },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true
+    },
+    {
+      "id": "autoclock.trigger",
+      "name": "Trigger Auto-Clock Check",
+      "method": "POST",
+      "endpoint": "/api/auto-clock",
+      "description": "Manual trigger for auto-clock check. Normally runs via Vercel cron.",
+      "params": { "required": [], "optional": [] },
+      "brain": "local",
+      "destructiveness": "low"
+    },
+    {
+      "id": "compliance.read",
+      "name": "Read Compliance Data",
+      "method": "GET",
+      "endpoint": "/api/openclaw/compliance",
+      "description": "Get entity compliance data — renewal dates, EINs, formation info.",
+      "params": { "required": [], "optional": [] },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true,
+      "status": "needs_build"
+    },
+    {
+      "id": "future_impl.list",
+      "name": "List Future Implementations",
+      "method": "GET",
+      "endpoint": "/api/openclaw/future-implementations",
+      "description": "Read the agent's backlog of things it wants built.",
+      "params": { "required": [], "optional": ["status"] },
+      "brain": "local",
+      "destructiveness": "none",
+      "idempotent": true,
+      "status": "needs_build"
+    },
+    {
+      "id": "future_impl.create",
+      "name": "Log Future Implementation",
+      "method": "POST",
+      "endpoint": "/api/openclaw/future-implementations",
+      "description": "Agent logs a feature it needs but doesn't have yet.",
+      "params": {
+        "required": ["title", "description"],
+        "optional": ["priority", "category"]
+      },
+      "brain": "local",
+      "destructiveness": "none",
+      "status": "needs_build"
+    },
+    {
+      "id": "receipt.analyze",
+      "name": "Analyze Receipt",
+      "method": "POST",
+      "endpoint": "/api/analyze-receipt",
+      "description": "Upload a receipt image for AI OCR analysis. Returns extracted vendor, amount, date.",
+      "params": {
+        "required": ["image"],
+        "optional": ["company_id"]
+      },
+      "brain": "cloud",
+      "destructiveness": "none",
+      "notes": "Requires multimodal/vision — always use cloud brain"
+    }
+  ]
+}
