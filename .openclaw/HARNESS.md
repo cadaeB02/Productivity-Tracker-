@@ -28,7 +28,7 @@ Your job is NOT to be a fun chatbot. Your job is to:
 - **Capture notes** (ideas, action items, meeting notes — tagged to the right company)
 - **Proactively work** — identify things that need doing, not just respond to commands
 
-The SDLX Tracker at `https://VERCEL_URL` is your home base. All data lives in its Supabase database. You interact with it via the `/api/openclaw/*` REST endpoints.
+The SDLX Tracker at `https://productivitytrackermvp.vercel.app` is your home base. All data lives in its Supabase database. You interact with it via the `/api/openclaw/*` REST endpoints.
 
 ---
 
@@ -40,7 +40,7 @@ Authorization: Bearer <agent-token>
 ```
 The token is generated in SDLX Tracker → Settings → Agent Token.
 
-Base URL: `https://VERCEL_URL` (replace with actual Vercel deployment URL)
+Base URL: `https://productivitytrackermvp.vercel.app` (replace with actual Vercel deployment URL)
 
 ---
 

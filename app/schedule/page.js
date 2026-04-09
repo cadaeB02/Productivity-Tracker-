@@ -125,9 +125,25 @@ export default function SchedulePage() {
         }
     };
 
-    const handleAddTask = async () => {
+    const handleAddTask = async (prefillDate, prefillHour) => {
         try {
             const newTask = await addScheduleTask("New Task", "unknown", "");
+            // If a time slot was clicked, pre-fill the date and time
+            if (prefillDate && prefillHour !== undefined) {
+                const sTime = `${prefillHour.toString().padStart(2, '0')}:00:00`;
+                const eHour = Math.min(23, prefillHour + 1);
+                const eTime = `${eHour.toString().padStart(2, '0')}:00:00`;
+                await updateScheduleTask(newTask.id, {
+                    scheduled_date: prefillDate,
+                    scheduled_start_time: sTime,
+                    scheduled_end_time: eTime,
+                    status: 'scheduled'
+                });
+                newTask.scheduled_date = prefillDate;
+                newTask.scheduled_start_time = sTime;
+                newTask.scheduled_end_time = eTime;
+                newTask.status = 'scheduled';
+            }
             setTasks([newTask, ...tasks]);
             setSelectedTask(newTask);
         } catch (err) {
@@ -413,6 +429,8 @@ export default function SchedulePage() {
                                                             className={`time-slot ${dragOverCell === cellId ? 'drag-over' : ''}`}
                                                             onDragOver={(e) => { e.preventDefault(); setDragOverCell(cellId); }}
                                                             onDragLeave={() => setDragOverCell(null)}
+                                                            onClick={() => handleAddTask(iso, hour)}
+                                                            title={`Add task at ${formattedHour}`}
                                                             onDrop={async (e) => {
                                                                 e.preventDefault();
                                                                 setDragOverCell(null);
@@ -1041,6 +1059,11 @@ export default function SchedulePage() {
                 .time-slot {
                     flex: 1;
                     border-top: 1px solid var(--border-color);
+                    cursor: pointer;
+                    transition: background 0.15s;
+                }
+                .time-slot:hover {
+                    background: rgba(99, 102, 241, 0.04);
                 }
 
                 .mock-block {
