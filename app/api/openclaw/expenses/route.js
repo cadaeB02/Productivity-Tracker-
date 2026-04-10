@@ -19,6 +19,61 @@ function verifyServerKey(request) {
     return null;
 }
 
+// GET /api/openclaw/expenses - list transactions with optional filters
+export async function GET(request) {
+    const authError = verifyServerKey(request);
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });
+
+    const admin = getAdminClient();
+    if (!admin) return NextResponse.json({ error: 'Server not configured' }, { status: 500 });
+
+    try {
+        const { searchParams } = new URL(request.url);
+        const companyId = searchParams.get('company_id');
+        const from = searchParams.get('from');
+        const to = searchParams.get('to');
+        const type = searchParams.get('type');
+        const limit = parseInt(searchParams.get('limit') || '50', 10);
+
+        let query = admin
+            .from('transactions')
+            .select('id, company_id, type, amount, description, category, date, vendor_id, is_recurring, created_at')
+            .order('date', { ascending: false })
+            .limit(limit);
+
+        if (companyId) query = query.eq('company_id', companyId);
+        if (type) query = query.eq('type', type);
+        if (from) query = query.gte('date', from);
+        if (to) query = query.lte('date', to);
+
+        const { data: transactions, error } = await query;
+        if (error) throw error;
+
+        // Get company names
+        const { data: companies } = await admin.from('companies').select('id, name');
+        const companyMap = {};
+        (companies || []).forEach(c => { companyMap[c.id] = c.name; });
+
+        const enriched = (transactions || []).map(t => ({
+            ...t,
+            company: companyMap[t.company_id] || 'Unknown',
+        }));
+
+        const totalExpenses = enriched.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+        const totalRevenue = enriched.filter(t => t.type === 'revenue').reduce((s, t) => s + parseFloat(t.amount), 0);
+
+        return NextResponse.json({
+            transaction_count: enriched.length,
+            total_expenses: Math.round(totalExpenses * 100) / 100,
+            total_revenue: Math.round(totalRevenue * 100) / 100,
+            transactions: enriched,
+        });
+    } catch (err) {
+        console.error('OpenClaw list expenses error:', err);
+        return NextResponse.json({ error: 'Failed to fetch expenses' }, { status: 500 });
+    }
+}
+
 // POST /api/openclaw/expenses - add a transaction (expense or revenue)
 export async function POST(request) {
     const authError = verifyServerKey(request);

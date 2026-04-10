@@ -19,6 +19,56 @@ function verifyServerKey(request) {
     return null;
 }
 
+// GET /api/openclaw/projects - list all projects, optionally filtered by company_id
+export async function GET(request) {
+    const authError = verifyServerKey(request);
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });
+
+    const admin = getAdminClient();
+    if (!admin) return NextResponse.json({ error: 'Server not configured' }, { status: 500 });
+
+    try {
+        const { searchParams } = new URL(request.url);
+        const companyId = searchParams.get('company_id');
+
+        let query = admin
+            .from('projects')
+            .select('id, name, company_id, created_at')
+            .order('created_at', { ascending: true });
+
+        if (companyId) query = query.eq('company_id', companyId);
+
+        const { data: projects, error } = await query;
+        if (error) throw error;
+
+        // Get company names
+        const { data: companies } = await admin.from('companies').select('id, name');
+        const companyMap = {};
+        (companies || []).forEach(c => { companyMap[c.id] = c.name; });
+
+        // Get task counts per project
+        const { data: tasks } = await admin.from('tasks').select('id, project_id');
+        const taskCounts = {};
+        (tasks || []).forEach(t => {
+            taskCounts[t.project_id] = (taskCounts[t.project_id] || 0) + 1;
+        });
+
+        const enriched = (projects || []).map(p => ({
+            ...p,
+            company: companyMap[p.company_id] || 'Unknown',
+            task_count: taskCounts[p.id] || 0,
+        }));
+
+        return NextResponse.json({
+            project_count: enriched.length,
+            projects: enriched,
+        });
+    } catch (err) {
+        console.error('OpenClaw list projects error:', err);
+        return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 });
+    }
+}
+
 // POST /api/openclaw/projects - create or update a project
 export async function POST(request) {
     const authError = verifyServerKey(request);

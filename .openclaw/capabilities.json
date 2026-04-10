@@ -49,7 +49,6 @@
       "brain": "local",
       "destructiveness": "none",
       "idempotent": true,
-      "status": "needs_build"
     },
     {
       "id": "projects.list",
@@ -172,7 +171,6 @@
       "brain": "local",
       "destructiveness": "none",
       "idempotent": true,
-      "status": "needs_build"
     },
     {
       "id": "stats.get",
@@ -187,7 +185,6 @@
       "brain": "local",
       "destructiveness": "none",
       "idempotent": true,
-      "status": "needs_build",
       "notes": "range options: today, yesterday, week, month, all"
     },
     {
@@ -261,7 +258,6 @@
       "brain": "local",
       "destructiveness": "none",
       "idempotent": true,
-      "status": "needs_build"
     },
     {
       "id": "future_impl.list",
@@ -273,7 +269,6 @@
       "brain": "local",
       "destructiveness": "none",
       "idempotent": true,
-      "status": "needs_build"
     },
     {
       "id": "future_impl.create",
@@ -287,7 +282,6 @@
       },
       "brain": "local",
       "destructiveness": "none",
-      "status": "needs_build"
     },
     {
       "id": "receipt.analyze",
@@ -299,9 +293,10 @@
         "required": ["image"],
         "optional": ["company_id"]
       },
-      "brain": "cloud",
+      "brain": "local",
       "destructiveness": "none",
-      "notes": "Requires multimodal/vision — always use cloud brain"
+      "security_class": "local_only",
+      "notes": "Financial receipts: use Gemma 4 locally. Non-financial: any brain."
     }
   ]
 }

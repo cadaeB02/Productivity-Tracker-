@@ -87,3 +87,66 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Failed to fetch treasury data' }, { status: 500 });
     }
 }
+
+// POST /api/openclaw/treasury - create a revenue or expense entry
+export async function POST(request) {
+    const authError = verifyServerKey(request);
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status });
+
+    const admin = getAdminClient();
+    if (!admin) return NextResponse.json({ error: 'Server not configured' }, { status: 500 });
+
+    try {
+        const body = await request.json();
+        const { company_id, type, amount, description, category, date, is_recurring, vendor_id } = body;
+
+        if (!company_id || !type || !amount) {
+            return NextResponse.json({ error: 'company_id, type, and amount are required' }, { status: 400 });
+        }
+
+        if (!['revenue', 'expense'].includes(type)) {
+            return NextResponse.json({ error: 'type must be "revenue" or "expense"' }, { status: 400 });
+        }
+
+        // Get user_id from company
+        const { data: company } = await admin
+            .from('companies')
+            .select('user_id, name')
+            .eq('id', company_id)
+            .single();
+
+        if (!company) {
+            return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+        }
+
+        const { data, error } = await admin
+            .from('transactions')
+            .insert({
+                user_id: company.user_id,
+                company_id,
+                type,
+                amount: parseFloat(amount),
+                description: description || '',
+                category: category || '',
+                date: date || new Date().toISOString().split('T')[0],
+                is_recurring: is_recurring || false,
+                vendor_id: vendor_id || null,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return NextResponse.json({
+            success: true,
+            message: `${type === 'revenue' ? 'Revenue' : 'Expense'} of $${parseFloat(amount).toFixed(2)} added to ${company.name}`,
+            transaction: {
+                ...data,
+                company: company.name,
+            },
+        }, { status: 201 });
+    } catch (err) {
+        console.error('OpenClaw treasury create error:', err);
+        return NextResponse.json({ error: 'Failed to create treasury entry' }, { status: 500 });
+    }
+}
