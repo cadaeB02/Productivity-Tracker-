@@ -190,3 +190,76 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
+
+// DELETE /api/agent-schedule - delete schedule blocks/tasks by ID or by date
+export async function DELETE(request) {
+    try {
+        const settings = await authenticateAgent(request);
+        if (!settings) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const admin = getAdminClient();
+        const { searchParams } = new URL(request.url);
+        const results = [];
+
+        // Option 1: Delete by specific IDs (query param or body)
+        let ids = searchParams.getAll('id');
+        
+        // Also accept JSON body with ids array
+        if (ids.length === 0) {
+            try {
+                const body = await request.json();
+                if (body.block_ids && Array.isArray(body.block_ids)) ids = body.block_ids;
+                if (body.task_ids && Array.isArray(body.task_ids)) {
+                    for (const taskId of body.task_ids) {
+                        const { error } = await admin
+                            .from('schedule_tasks')
+                            .delete()
+                            .eq('id', taskId)
+                            .eq('user_id', settings.user_id);
+                        results.push(error
+                            ? { type: 'task', id: taskId, error: error.message }
+                            : { type: 'task', id: taskId, status: 'deleted' });
+                    }
+                }
+            } catch (_) {
+                // No body is fine
+            }
+        }
+
+        // Delete blocks by ID
+        for (const blockId of ids) {
+            const { error } = await admin
+                .from('schedule_blocks')
+                .delete()
+                .eq('id', blockId)
+                .eq('user_id', settings.user_id);
+            results.push(error
+                ? { type: 'block', id: blockId, error: error.message }
+                : { type: 'block', id: blockId, status: 'deleted' });
+        }
+
+        // Option 2: Delete all blocks for a specific date
+        const date = searchParams.get('date');
+        if (date && ids.length === 0) {
+            const { data: deleted, error } = await admin
+                .from('schedule_blocks')
+                .delete()
+                .eq('user_id', settings.user_id)
+                .eq('date', date)
+                .eq('is_recurring', false)
+                .select('id');
+            if (error) {
+                results.push({ type: 'date_clear', date, error: error.message });
+            } else {
+                results.push({ type: 'date_clear', date, deleted_count: (deleted || []).length, status: 'cleared' });
+            }
+        }
+
+        return NextResponse.json({ success: true, results });
+    } catch (err) {
+        console.error('Agent schedule DELETE error:', err);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+}
